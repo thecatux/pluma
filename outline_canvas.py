@@ -1,443 +1,301 @@
-"""Lienzo de diagramas para la sección "Esquema".
+"""Lienzo de la sección "Línea temporal".
 
-Implementado sobre QGraphicsView/QGraphicsScene. Cada forma es un
-`ShapeItem` (rectángulo, elipse, rombo o nota) que se puede mover,
-redimensionar (tirando de la esquina inferior derecha) y renombrar
-(doble clic). Las flechas (`ConnectionItem`) enlazan dos formas y
-siguen su posición automáticamente cuando estas se mueven.
+Cada evento de la historia es un bloque (`_BlockCard`) con título,
+fecha/orden libre, grupo opcional (capítulo, escena o lo que el
+usuario quiera escribir) y una nota. Los bloques viven en una sola
+fila que se puede arrastrar para reordenar (usando el propio
+QListWidget en modo icono con reordenado interno, sin reinventar
+drag&drop a mano). El color de cada bloque se deriva de su grupo, así
+que agrupar es tan simple como escribir el mismo nombre en varios
+bloques; unos chips encima de la fila permiten filtrar por grupo.
 
-El widget no conoce SQLite directamente: emite señales de alto nivel
-(`shapeCreated`, `shapeChanged`, `shapeDeleted`, `connectionCreated`,
-`connectionDeleted`) para que el anfitrión (OutlinePanel) las traduzca
-a operaciones de `Database`. Esto mantiene la lógica de dibujo
-separada de la persistencia, igual que el resto de la aplicación.
+Igual que el resto de Pluma, este widget no toca SQLite: emite
+señales de alto nivel para que `OutlinePanel` las traduzca a
+operaciones de `Database`.
 """
 
-from PySide6.QtWidgets import (QGraphicsView, QGraphicsScene, QGraphicsItem,
-                                QGraphicsRectItem, QGraphicsEllipseItem, QGraphicsPolygonItem,
-                                QGraphicsLineItem, QGraphicsTextItem, QWidget, QVBoxLayout,
-                                QToolBar, QToolButton, QButtonGroup, QColorDialog, QMenu,
-                                QGraphicsSceneMouseEvent)
-from PySide6.QtGui import (QBrush, QColor, QPen, QPolygonF, QPainter, QFont,
-                            QAction, QActionGroup)
-from PySide6.QtCore import Qt, QRectF, QPointF, QLineF, Signal, QObject
+from PySide6.QtWidgets import (QWidget, QFrame, QVBoxLayout, QHBoxLayout, QLabel,
+                                QLineEdit, QPlainTextEdit, QComboBox, QPushButton,
+                                QListWidget, QListWidgetItem, QListView, QAbstractItemView,
+                                QSizePolicy)
+from PySide6.QtCore import Qt, QTimer, Signal
 
-HANDLE_SIZE = 10
-MIN_SHAPE_SIZE = 40
+import theme
+from app_settings import settings, signals as settings_signals
 
-SHAPE_COLORS = ["#4C6EF5", "#F76707", "#2F9E44", "#E03131", "#AE3EC9", "#495057"]
-
-
-class _Signals(QObject):
-    """QGraphicsItem no es un QObject y no puede emitir señales por sí
-    mismo; este pequeño puente permite que ShapeItem y ConnectionItem
-    avisen de cambios sin duplicar lógica de notificación."""
-    moved = Signal()
-    editingFinished = Signal()
+GROUP_COLORS = ["#4C6EF5", "#F76707", "#2F9E44", "#E03131", "#AE3EC9", "#0CA678", "#F59F00", "#1971C2"]
+NO_GROUP_COLOR = "#ADB5BD"
+NO_GROUP_LABEL = "Sin grupo"
 
 
-class _EditableLabel(QGraphicsTextItem):
-    """QGraphicsTextItem que avisa (vía `signals.editingFinished`) cuando
-    pierde el foco tras una edición, para que ShapeItem pueda confirmar
-    el nuevo texto y notificar al anfitrión (que lo persiste en BD)."""
-
-    def __init__(self, text, parent_shape):
-        super().__init__(text, parent_shape)
-        self.signals = _Signals()
-
-    def focusOutEvent(self, event):
-        super().focusOutEvent(event)
-        self.signals.editingFinished.emit()
+def _color_for_group(group_name: str) -> str:
+    if not group_name:
+        return NO_GROUP_COLOR
+    return GROUP_COLORS[sum(ord(ch) for ch in group_name) % len(GROUP_COLORS)]
 
 
-class ShapeItem(QGraphicsItem):
-    """Forma de diagrama: rectángulo, elipse, rombo o nota adhesiva.
+class _BlockCard(QFrame):
+    """Tarjeta de un evento. Se autoguarda con el mismo retardo que el
+    resto de Pluma; los cambios de grupo se reflejan de inmediato en
+    el color del borde y en los chips de filtro, sin esperar al
+    guardado."""
 
-    Se persiste con un `shape_id` (None mientras no se ha guardado la
-    primera vez) para que el anfitrión pueda correlacionar este item
-    gráfico con su fila en `outline_shapes`.
-    """
+    FIXED_WIDTH = 240
+    MIN_NOTE_HEIGHT = 28
+    MAX_NOTE_HEIGHT = 160
 
-    def __init__(self, shape_type: str, rect: QRectF, text: str = "",
-                 color: str = SHAPE_COLORS[0], shape_id=None):
-        super().__init__()
-        self.shape_type = shape_type
-        self.shape_id = shape_id
-        self._rect = QRectF(0, 0, rect.width(), rect.height())
-        self.setPos(rect.topLeft())
-        self.color = QColor(color)
-        self.signals = _Signals()
-
-        self.setFlags(QGraphicsItem.ItemIsMovable | QGraphicsItem.ItemIsSelectable |
-                      QGraphicsItem.ItemSendsGeometryChanges)
-        self.setAcceptHoverEvents(True)
-        self.setZValue(1)
-
-        self._resizing = False
-        self._resize_start_rect = None
-        self._resize_start_pos = None
-
-        self.label = _EditableLabel(text, self)
-        self.label.setDefaultTextColor(QColor("#FFFFFF") if self._is_dark(self.color) else QColor("#1A1A1A"))
-        self.label.setTextInteractionFlags(Qt.NoTextInteraction)
-        font = QFont()
-        font.setPointSize(10)
-        self.label.setFont(font)
-        self.label.signals.editingFinished.connect(self._on_label_focus_out)
-        self._center_label()
-        self._owner_canvas = None
-
-        self.connections: list["ConnectionItem"] = []
-
-    # -- utilidades ----------------------------------------------------- #
-    @staticmethod
-    def _is_dark(color: QColor) -> bool:
-        return (0.299 * color.red() + 0.587 * color.green() + 0.114 * color.blue()) < 140
-
-    def _center_label(self):
-        self.label.setTextWidth(max(self._rect.width() - 16, 20))
-        lr = self.label.boundingRect()
-        x = (self._rect.width() - lr.width()) / 2
-        y = (self._rect.height() - lr.height()) / 2
-        self.label.setPos(x, max(y, 4))
-
-    def boundingRect(self) -> QRectF:
-        return self._rect.adjusted(-2, -2, 2, 2)
-
-    def shape_rect(self) -> QRectF:
-        return QRectF(self._rect)
-
-    def set_size(self, w: float, h: float):
-        w = max(w, MIN_SHAPE_SIZE)
-        h = max(h, MIN_SHAPE_SIZE)
-        self.prepareGeometryChange()
-        self._rect = QRectF(0, 0, w, h)
-        self._center_label()
-        self._notify_connections()
-
-    def set_text(self, text: str):
-        self.label.setPlainText(text)
-        self._center_label()
-
-    def set_color(self, color: QColor):
-        self.color = color
-        self.label.setDefaultTextColor(QColor("#FFFFFF") if self._is_dark(color) else QColor("#1A1A1A"))
-        self.update()
-
-    def _notify_connections(self):
-        for conn in self.connections:
-            conn.update_position()
-        self.signals.moved.emit()
-
-    # -- dibujo ----------------------------------------------------------#
-    def paint(self, painter: QPainter, option, widget=None):
-        pen = QPen(self.color.darker(130), 2)
-        if self.isSelected():
-            pen.setColor(QColor("#1971C2"))
-            pen.setWidth(3)
-        painter.setPen(pen)
-        painter.setBrush(QBrush(self.color.lighter(150) if self.shape_type != "note" else QColor("#FFF3BF")))
-
-        r = self._rect
-        if self.shape_type == "rect":
-            painter.drawRoundedRect(r, 6, 6)
-        elif self.shape_type == "ellipse":
-            painter.drawEllipse(r)
-        elif self.shape_type == "diamond":
-            poly = QPolygonF([
-                QPointF(r.center().x(), r.top()),
-                QPointF(r.right(), r.center().y()),
-                QPointF(r.center().x(), r.bottom()),
-                QPointF(r.left(), r.center().y()),
-            ])
-            painter.drawPolygon(poly)
-        else:  # note
-            painter.drawRect(r)
-
-        if self.isSelected():
-            painter.setBrush(QBrush(QColor("#1971C2")))
-            painter.setPen(Qt.NoPen)
-            painter.drawRect(self._handle_rect())
-
-    def _handle_rect(self) -> QRectF:
-        r = self._rect
-        return QRectF(r.right() - HANDLE_SIZE, r.bottom() - HANDLE_SIZE, HANDLE_SIZE, HANDLE_SIZE)
-
-    # -- interacción -------------------------------------------------- #
-    def hoverMoveEvent(self, event):
-        if self.isSelected() and self._handle_rect().contains(event.pos()):
-            self.setCursor(Qt.SizeFDiagCursor)
-        else:
-            self.setCursor(Qt.SizeAllCursor)
-        super().hoverMoveEvent(event)
-
-    def mousePressEvent(self, event):
-        if self.isSelected() and self._handle_rect().contains(event.pos()):
-            self._resizing = True
-            self._resize_start_rect = QRectF(self._rect)
-            self._resize_start_pos = event.scenePos()
-            event.accept()
-            return
-        super().mousePressEvent(event)
-
-    def mouseMoveEvent(self, event):
-        if self._resizing:
-            delta = event.scenePos() - self._resize_start_pos
-            self.set_size(self._resize_start_rect.width() + delta.x(),
-                           self._resize_start_rect.height() + delta.y())
-            event.accept()
-            return
-        super().mouseMoveEvent(event)
-
-    def mouseReleaseEvent(self, event):
-        if self._resizing:
-            self._resizing = False
-            self.signals.moved.emit()
-            event.accept()
-            return
-        super().mouseReleaseEvent(event)
-
-    def mouseDoubleClickEvent(self, event):
-        self.label.setTextInteractionFlags(Qt.TextEditorInteraction)
-        self.label.setFocus()
-        cursor = self.label.textCursor()
-        cursor.select(cursor.SelectionType.Document)
-        self.label.setTextCursor(cursor)
-        event.accept()
-
-    def itemChange(self, change, value):
-        if change == QGraphicsItem.ItemPositionHasChanged:
-            self._notify_connections()
-        return super().itemChange(change, value)
-
-    def finish_text_edit(self):
-        self.label.setTextInteractionFlags(Qt.NoTextInteraction)
-        self._center_label()
-
-    def _on_label_focus_out(self):
-        self.finish_text_edit()
-        self.signals.editingFinished.emit()
-
-
-class ConnectionItem(QGraphicsLineItem):
-    """Flecha que enlaza dos ShapeItem y sigue su posición al moverlos."""
-
-    def __init__(self, from_shape: ShapeItem, to_shape: ShapeItem, connection_id=None):
-        super().__init__()
-        self.from_shape = from_shape
-        self.to_shape = to_shape
-        self.connection_id = connection_id
-        self.setZValue(0)
-        self.setPen(QPen(QColor("#495057"), 2))
-        from_shape.connections.append(self)
-        to_shape.connections.append(self)
-        self.update_position()
-
-    def update_position(self):
-        a = self.from_shape.sceneBoundingRect().center()
-        b = self.to_shape.sceneBoundingRect().center()
-        self.setLine(QLineF(a, b))
-
-    def paint(self, painter, option, widget=None):
-        super().paint(painter, option, widget)
-        line = self.line()
-        if line.length() == 0:
-            return
-        angle = line.angle()
-        arrow_size = 12
-        import math
-        p1 = line.p2()
-        a1 = math.radians(angle + 150)
-        a2 = math.radians(angle - 150)
-        arrow_p1 = p1 + QPointF(math.cos(a1) * arrow_size, -math.sin(a1) * arrow_size)
-        arrow_p2 = p1 + QPointF(math.cos(a2) * arrow_size, -math.sin(a2) * arrow_size)
-        painter.setBrush(QBrush(QColor("#495057")))
-        painter.setPen(Qt.NoPen)
-        painter.drawPolygon(QPolygonF([p1, arrow_p1, arrow_p2]))
-
-
-SHAPE_LABELS = {"rect": "Rectángulo", "ellipse": "Elipse", "diamond": "Rombo", "note": "Nota"}
-
-
-class OutlineScene(QGraphicsScene):
-    """Escena que sabe crear formas al hacer clic cuando hay una
-    herramienta de forma activa, y conectarlas cuando la herramienta
-    activa es "connect"."""
-
-    shapeRequested = Signal(str, QPointF)
-    connectRequested = Signal(ShapeItem, ShapeItem)
-    shapeTextEdited = Signal(ShapeItem)
-    selectionRequested = Signal(object)
-
-    def __init__(self, parent=None):
+    def __init__(self, block_id, title, date_label, group_name, description,
+                 known_groups, on_change, on_delete, on_group_edited, parent=None):
         super().__init__(parent)
-        self.active_tool = "select"
-        self._connect_source = None
-        self.setBackgroundBrush(QBrush(QColor("#F8F9FA")))
+        self.block_id = block_id
+        self._on_change = on_change
+        self._on_delete = on_delete
+        self._on_group_edited = on_group_edited
+        self.setFixedWidth(self.FIXED_WIDTH)
 
-    def mousePressEvent(self, event):
-        item = self.itemAt(event.scenePos(), self.views()[0].transform()) if self.views() else None
-        shape = self._as_shape(item)
-
-        if self.active_tool in SHAPE_LABELS and shape is None and item is None:
-            self.shapeRequested.emit(self.active_tool, event.scenePos())
-            return
-
-        if self.active_tool == "connect":
-            if shape is not None:
-                if self._connect_source is None:
-                    self._connect_source = shape
-                    shape.setSelected(True)
-                elif shape is not self._connect_source:
-                    self.connectRequested.emit(self._connect_source, shape)
-                    self._connect_source.setSelected(False)
-                    self._connect_source = None
-            return
-
-        super().mousePressEvent(event)
-
-    @staticmethod
-    def _as_shape(item):
-        while item is not None and not isinstance(item, ShapeItem):
-            item = item.parentItem()
-        return item
-
-
-class OutlineCanvas(QWidget):
-    """Widget completo: barra de herramientas + QGraphicsView."""
-
-    shapeCreated = Signal(str, float, float)          # tipo, x, y
-    shapeMoved = Signal(object)                        # ShapeItem
-    shapeRenamed = Signal(object, str)                  # ShapeItem, texto
-    shapeDeleted = Signal(object)                       # ShapeItem
-    shapeRecolored = Signal(object, str)                # ShapeItem, color hex
-    connectionCreated = Signal(object, object)          # from ShapeItem, to ShapeItem
-    connectionDeleted = Signal(object)                  # ConnectionItem
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.scene = OutlineScene(self)
-        self.scene.setSceneRect(0, 0, 3000, 2000)
-        self.view = QGraphicsView(self.scene, self)
-        self.view.setRenderHint(QPainter.Antialiasing)
-        self.view.setDragMode(QGraphicsView.RubberBandDrag)
+        self._save_timer = QTimer(self)
+        self._save_timer.setSingleShot(True)
+        self._save_timer.setInterval(settings.autosave_interval_ms)
+        self._save_timer.timeout.connect(self._save)
+        settings_signals.changed.connect(self._on_settings_changed)
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
-        layout.addWidget(self._build_toolbar())
-        layout.addWidget(self.view)
+        layout.setContentsMargins(12, 10, 10, 10)
+        layout.setSpacing(5)
 
-        self.scene.shapeRequested.connect(lambda t, p: self.shapeCreated.emit(t, p.x(), p.y()))
-        self.scene.connectRequested.connect(lambda a, b: self.connectionCreated.emit(a, b))
+        header = QHBoxLayout()
+        self.title_edit = QLineEdit(title)
+        self.title_edit.setPlaceholderText("Título del evento")
+        self.title_edit.setStyleSheet("border: none; background: transparent; font-weight: 600;")
+        self.title_edit.textEdited.connect(self._schedule_save)
+        header.addWidget(self.title_edit, 1)
+        delete_btn = QPushButton("✕")
+        delete_btn.setProperty("variant", "icon")
+        delete_btn.setFixedSize(18, 18)
+        delete_btn.setToolTip("Eliminar este evento")
+        delete_btn.clicked.connect(lambda: self._on_delete(self.block_id))
+        header.addWidget(delete_btn)
+        layout.addLayout(header)
 
-        self._shape_items: dict[int, ShapeItem] = {}
-        self._connection_items: list[ConnectionItem] = []
+        self.date_edit = QLineEdit(date_label)
+        self.date_edit.setPlaceholderText("Fecha u orden (opcional)")
+        self.date_edit.textEdited.connect(self._schedule_save)
+        layout.addWidget(self.date_edit)
 
-    def apply_theme(self, colors: dict):
-        """Ajusta el fondo del lienzo al esquema de color activo. Las
-        formas conservan sus propios colores (elegidos por el usuario),
-        ya que son contenido, no "chrome" de la aplicación."""
-        self.scene.setBackgroundBrush(QBrush(QColor(colors["surface_alt"])))
+        self.group_combo = QComboBox()
+        self.group_combo.setEditable(True)
+        self.group_combo.setInsertPolicy(QComboBox.NoInsert)
+        self.group_combo.lineEdit().setPlaceholderText(NO_GROUP_LABEL)
+        self._reload_group_suggestions(known_groups)
+        self.group_combo.setCurrentText(group_name)
+        self.group_combo.editTextChanged.connect(self._on_group_text_changed)
+        layout.addWidget(self.group_combo)
 
-    def _build_toolbar(self) -> QToolBar:
-        toolbar = QToolBar("Herramientas de esquema", self)
-        self.tool_group = QActionGroup(self)
-        self.tool_group.setExclusive(True)
+        self.note_edit = QPlainTextEdit(description)
+        self.note_edit.setPlaceholderText("Notas del evento (opcional)")
+        self.note_edit.setStyleSheet("background: transparent; border: none; padding: 0;")
+        self.note_edit.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.note_edit.textChanged.connect(self._autosize_note)
+        self.note_edit.textChanged.connect(self._schedule_save)
+        layout.addWidget(self.note_edit)
 
-        def add_tool(key, label, tip):
-            action = QAction(label, self)
-            action.setCheckable(True)
-            action.setStatusTip(tip)
-            action.triggered.connect(lambda: self._set_tool(key))
-            self.tool_group.addAction(action)
-            toolbar.addAction(action)
-            return action
+        self._group_color = _color_for_group(group_name)
+        self._apply_theme()
+        self._autosize_note()
+        theme.signals.changed.connect(self._apply_theme)
 
-        self.select_action = add_tool("select", "Seleccionar", "Seleccionar y mover formas")
-        self.select_action.setChecked(True)
-        toolbar.addSeparator()
-        add_tool("rect", "▭ Rectángulo", "Añadir un rectángulo (clic en el lienzo)")
-        add_tool("ellipse", "◯ Elipse", "Añadir una elipse (clic en el lienzo)")
-        add_tool("diamond", "◇ Rombo", "Añadir un rombo (clic en el lienzo)")
-        add_tool("note", "▤ Nota", "Añadir una nota adhesiva (clic en el lienzo)")
-        toolbar.addSeparator()
-        add_tool("connect", "↗ Conectar", "Clic en una forma y luego en otra para unirlas con una flecha")
-        toolbar.addSeparator()
+    # -- estilo ---------------------------------------------------------- #
+    def _apply_theme(self, *_args):
+        c = theme.colors()
+        self.setStyleSheet(
+            f"_BlockCard {{ background: {c['surface']}; border: 1px solid {c['border']}; "
+            f"border-left: 4px solid {self._group_color}; border-radius: {theme.RADIUS['md']}px; }}"
+        )
 
-        color_action = QAction("🎨 Color", self)
-        color_action.setStatusTip("Cambiar el color de la forma seleccionada")
-        color_action.triggered.connect(self._recolor_selected)
-        toolbar.addAction(color_action)
+    def _autosize_note(self):
+        target = int(self.note_edit.document().size().height()) + 8
+        target = max(self.MIN_NOTE_HEIGHT, min(self.MAX_NOTE_HEIGHT, target))
+        self.note_edit.setFixedHeight(target)
 
-        delete_action = QAction("🗑 Eliminar", self)
-        delete_action.setStatusTip("Eliminar la forma o conexión seleccionada (o pulsa Supr)")
-        delete_action.triggered.connect(self.delete_selected)
-        toolbar.addAction(delete_action)
+    def _reload_group_suggestions(self, known_groups):
+        current = self.group_combo.currentText() if self.group_combo.count() else ""
+        self.group_combo.blockSignals(True)
+        self.group_combo.clear()
+        self.group_combo.addItem("")
+        self.group_combo.addItems(sorted(g for g in known_groups if g))
+        self.group_combo.setCurrentText(current)
+        self.group_combo.blockSignals(False)
 
-        return toolbar
+    # -- edición ----------------------------------------------------------#
+    def current_group(self) -> str:
+        return self.group_combo.currentText().strip()
 
-    def _set_tool(self, key):
-        self.scene.active_tool = key
-        self.view.setDragMode(QGraphicsView.RubberBandDrag if key == "select" else QGraphicsView.NoDrag)
+    def _on_group_text_changed(self, text):
+        self._group_color = _color_for_group(text.strip())
+        self._apply_theme()
+        self._on_group_edited()
+        self._schedule_save()
+
+    def _on_settings_changed(self):
+        self._save_timer.setInterval(settings.autosave_interval_ms)
+
+    def _schedule_save(self, *_args):
+        self._save_timer.start()
+
+    def _save(self):
+        self._on_change(self.block_id, {
+            "title": self.title_edit.text().strip() or "Nuevo evento",
+            "date_label": self.date_edit.text().strip(),
+            "group_name": self.current_group(),
+            "description": self.note_edit.toPlainText(),
+        })
+
+    def flush_pending_save(self):
+        if self._save_timer.isActive():
+            self._save_timer.stop()
+            self._save()
+
+
+class _TimelineList(QListWidget):
+    """QListWidget en modo icono horizontal: el reordenado interno de
+    Qt ya resuelve el arrastrar-y-soltar, así que no hace falta
+    implementar drag&drop a mano."""
+
+    reordered = Signal()
+
+    def dropEvent(self, event):
+        super().dropEvent(event)
+        self.reordered.emit()
+
+
+class TimelineCanvas(QWidget):
+    addRequested = Signal()
+    blockChanged = Signal(int, dict)
+    blockDeleteRequested = Signal(int)
+    blocksReordered = Signal(list)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._active_filters: set[str] = set()
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(14, 12, 14, 14)
+        layout.setSpacing(10)
+        layout.addLayout(self._build_top_bar())
+
+        self.list_widget = _TimelineList()
+        self.list_widget.setObjectName("TimelineList")
+        self.list_widget.setViewMode(QListView.IconMode)
+        self.list_widget.setFlow(QListView.LeftToRight)
+        self.list_widget.setWrapping(True)
+        self.list_widget.setResizeMode(QListView.Adjust)
+        self.list_widget.setMovement(QListView.Snap)
+        self.list_widget.setDragDropMode(QAbstractItemView.InternalMove)
+        self.list_widget.setSelectionMode(QAbstractItemView.NoSelection)
+        self.list_widget.setSpacing(12)
+        self.list_widget.reordered.connect(self._on_reordered)
+        layout.addWidget(self.list_widget, 1)
+
+    def _build_top_bar(self) -> QHBoxLayout:
+        top_bar = QHBoxLayout()
+        top_bar.setSpacing(8)
+        self.add_button = QPushButton("+ Añadir evento")
+        self.add_button.setProperty("variant", "primary")
+        self.add_button.clicked.connect(self.addRequested.emit)
+        top_bar.addWidget(self.add_button)
+
+        self.chips_layout = QHBoxLayout()
+        self.chips_layout.setSpacing(6)
+        top_bar.addLayout(self.chips_layout)
+        top_bar.addStretch(1)
+        return top_bar
 
     # ------------------------------------------------------------------ #
-    # Sincronización con la base de datos: el anfitrión llama a estos
-    # métodos tras crear/leer filas para reflejar el estado en el lienzo.
+    # Sincronización con la base de datos
     # ------------------------------------------------------------------ #
-    def add_shape_item(self, shape_id, shape_type, x, y, w, h, text, color) -> ShapeItem:
-        item = ShapeItem(shape_type, QRectF(x, y, w, h), text, color, shape_id=shape_id)
-        self.scene.addItem(item)
-        item.signals.moved.connect(lambda: self.shapeMoved.emit(item))
-        item.signals.editingFinished.connect(lambda: self.shapeRenamed.emit(item, item.label.toPlainText()))
-        self._shape_items[shape_id] = item
-        return item
+    def set_blocks(self, rows):
+        self.list_widget.clear()
+        known_groups = sorted({row["group_name"] for row in rows if row["group_name"]})
+        for row in rows:
+            self._add_card(row["id"], row["title"], row["date_label"],
+                            row["group_name"], row["description"], known_groups)
+        self._refresh_chips()
 
-    def add_connection_item(self, connection_id, from_shape_id, to_shape_id) -> ConnectionItem | None:
-        a = self._shape_items.get(from_shape_id)
-        b = self._shape_items.get(to_shape_id)
-        if not a or not b:
-            return None
-        conn = ConnectionItem(a, b, connection_id=connection_id)
-        self.scene.addItem(conn)
-        self._connection_items.append(conn)
-        return conn
+    def _add_card(self, block_id, title, date_label, group_name, description, known_groups):
+        card = _BlockCard(block_id, title, date_label, group_name, description, known_groups,
+                           on_change=self.blockChanged.emit,
+                           on_delete=self.blockDeleteRequested.emit,
+                           on_group_edited=self._refresh_chips)
+        item = QListWidgetItem()
+        item.setData(Qt.UserRole, block_id)
+        item.setFlags(item.flags() & ~Qt.ItemIsSelectable)
+        self.list_widget.addItem(item)
+        item.setSizeHint(card.sizeHint())
+        self.list_widget.setItemWidget(item, card)
+        return card
 
-    def clear_canvas(self):
-        self.scene.clear()
-        self._shape_items.clear()
-        self._connection_items.clear()
+    def flush_pending_saves(self):
+        for i in range(self.list_widget.count()):
+            card = self.list_widget.itemWidget(self.list_widget.item(i))
+            if card is not None:
+                card.flush_pending_save()
 
-    def delete_selected(self):
-        for item in list(self.scene.selectedItems()):
-            if isinstance(item, ShapeItem):
-                for conn in list(item.connections):
-                    self._remove_connection(conn)
-                self._shape_items.pop(item.shape_id, None)
-                self.scene.removeItem(item)
-                self.shapeDeleted.emit(item)
+    def _on_reordered(self):
+        ids = [self.list_widget.item(i).data(Qt.UserRole) for i in range(self.list_widget.count())]
+        self.blocksReordered.emit(ids)
 
-    def _remove_connection(self, conn: ConnectionItem):
-        conn.from_shape.connections.remove(conn)
-        conn.to_shape.connections.remove(conn)
-        if conn in self._connection_items:
-            self._connection_items.remove(conn)
-        self.scene.removeItem(conn)
-        self.connectionDeleted.emit(conn)
+    # ------------------------------------------------------------------ #
+    # Filtro por grupo
+    # ------------------------------------------------------------------ #
+    def _current_groups(self):
+        names, has_ungrouped = set(), False
+        for i in range(self.list_widget.count()):
+            card = self.list_widget.itemWidget(self.list_widget.item(i))
+            if card is None:
+                continue
+            name = card.current_group()
+            if name:
+                names.add(name)
+            else:
+                has_ungrouped = True
+        return sorted(names), has_ungrouped
 
-    def _recolor_selected(self):
-        shapes = [i for i in self.scene.selectedItems() if isinstance(i, ShapeItem)]
-        if not shapes:
-            return
-        color = QColorDialog.getColor(shapes[0].color, self, "Color de la forma")
-        if not color.isValid():
-            return
-        for shape in shapes:
-            shape.set_color(color)
-            self.shapeRecolored.emit(shape, color.name())
+    def _refresh_chips(self):
+        while self.chips_layout.count():
+            widget = self.chips_layout.takeAt(0).widget()
+            if widget:
+                widget.deleteLater()
 
-    def keyPressEvent(self, event):
-        if event.key() in (Qt.Key_Delete, Qt.Key_Backspace):
-            self.delete_selected()
+        groups, has_ungrouped = self._current_groups()
+        self._active_filters &= set(groups) | ({NO_GROUP_LABEL} if has_ungrouped else set())
+        labels = groups + ([NO_GROUP_LABEL] if has_ungrouped else [])
+        for label in labels:
+            chip = QPushButton(label)
+            chip.setProperty("variant", "chip")
+            chip.setCheckable(True)
+            chip.setChecked(label in self._active_filters)
+            chip.toggled.connect(lambda checked, name=label: self._on_chip_toggled(name, checked))
+            self.chips_layout.addWidget(chip)
+
+        for i in range(self.list_widget.count()):
+            card = self.list_widget.itemWidget(self.list_widget.item(i))
+            if isinstance(card, _BlockCard):
+                card._reload_group_suggestions(groups)
+        self._apply_filters()
+
+    def _on_chip_toggled(self, name, checked):
+        if checked:
+            self._active_filters.add(name)
         else:
-            super().keyPressEvent(event)
+            self._active_filters.discard(name)
+        self._apply_filters()
+
+    def _apply_filters(self):
+        for i in range(self.list_widget.count()):
+            item = self.list_widget.item(i)
+            card = self.list_widget.itemWidget(item)
+            if card is None:
+                continue
+            name = card.current_group() or NO_GROUP_LABEL
+            visible = not self._active_filters or name in self._active_filters
+            item.setHidden(not visible)

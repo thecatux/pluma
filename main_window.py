@@ -29,7 +29,7 @@ SECTIONS = [
     ("chapters", "📖", "Capítulos"),
     ("characters", "🧑", "Personajes"),
     ("scenes", "🎬", "Escenas"),
-    ("outline", "🗺️", "Esquema"),
+    ("outline", "🕒", "Línea temporal"),
     ("notes", "🗒️", "Notas"),
     ("settings", "⚙️", "Ajustes"),
 ]

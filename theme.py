@@ -316,6 +316,20 @@ def build_stylesheet(palette: dict) -> str:
         font-weight: 600;
     }}
 
+    QListWidget#TimelineList {{
+        background: transparent;
+        border: none;
+        padding: 0;
+    }}
+    QListWidget#TimelineList::item {{
+        padding: 0;
+        margin: 0;
+        background: transparent;
+    }}
+    QListWidget#TimelineList::item:hover, QListWidget#TimelineList::item:selected {{
+        background: transparent;
+    }}
+
     QListWidget#Sidebar {{
         background: {c['sidebar_bg']};
         border: none;

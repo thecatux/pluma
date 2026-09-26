@@ -176,24 +176,14 @@ class Database:
                     PRIMARY KEY (scene_id, chapter_id)
                 );
 
-                CREATE TABLE IF NOT EXISTS outline_shapes (
+                CREATE TABLE IF NOT EXISTS timeline_blocks (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-                    shape_type TEXT NOT NULL,
-                    x REAL NOT NULL DEFAULT 0,
-                    y REAL NOT NULL DEFAULT 0,
-                    w REAL NOT NULL DEFAULT 120,
-                    h REAL NOT NULL DEFAULT 80,
-                    text TEXT NOT NULL DEFAULT '',
-                    color TEXT NOT NULL DEFAULT '#4C6EF5',
-                    z_order INTEGER NOT NULL DEFAULT 0
-                );
-
-                CREATE TABLE IF NOT EXISTS outline_connections (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-                    from_shape_id INTEGER NOT NULL REFERENCES outline_shapes(id) ON DELETE CASCADE,
-                    to_shape_id INTEGER NOT NULL REFERENCES outline_shapes(id) ON DELETE CASCADE
+                    title TEXT NOT NULL DEFAULT 'Nuevo evento',
+                    date_label TEXT NOT NULL DEFAULT '',
+                    group_name TEXT NOT NULL DEFAULT '',
+                    description TEXT NOT NULL DEFAULT '',
+                    order_index INTEGER NOT NULL DEFAULT 0
                 );
 
                 CREATE TABLE IF NOT EXISTS notes (
@@ -218,8 +208,7 @@ class Database:
                 CREATE INDEX IF NOT EXISTS idx_scene_fields_scene ON scene_fields(scene_id, order_index);
                 CREATE INDEX IF NOT EXISTS idx_scene_links_scene ON scene_chapter_links(scene_id);
                 CREATE INDEX IF NOT EXISTS idx_scene_links_chapter ON scene_chapter_links(chapter_id);
-                CREATE INDEX IF NOT EXISTS idx_outline_shapes_project ON outline_shapes(project_id, z_order);
-                CREATE INDEX IF NOT EXISTS idx_outline_connections_project ON outline_connections(project_id);
+                CREATE INDEX IF NOT EXISTS idx_timeline_blocks_project ON timeline_blocks(project_id, order_index);
                 CREATE INDEX IF NOT EXISTS idx_notes_project ON notes(project_id, order_index);
                 """
             )
@@ -543,59 +532,42 @@ class Database:
                 )
 
     # ------------------------------------------------------------------ #
-    # Esquema (diagramas: formas + conexiones)
+    # Esquema (línea temporal: bloques ordenables y agrupables)
     # ------------------------------------------------------------------ #
-    def list_outline_shapes(self, project_id: int) -> list[sqlite3.Row]:
+    def list_timeline_blocks(self, project_id: int) -> list[sqlite3.Row]:
         cur = self._conn.execute(
-            "SELECT * FROM outline_shapes WHERE project_id = ? ORDER BY z_order, id",
+            "SELECT * FROM timeline_blocks WHERE project_id = ? ORDER BY order_index, id",
             (project_id,),
         )
         return cur.fetchall()
 
-    def get_outline_shape(self, shape_id: int) -> Optional[sqlite3.Row]:
-        cur = self._conn.execute("SELECT * FROM outline_shapes WHERE id = ?", (shape_id,))
-        return cur.fetchone()
-
-    def create_outline_shape(self, project_id: int, shape_type: str, x: float, y: float,
-                              w: float = 140, h: float = 80, text: str = "",
-                              color: str = "#4C6EF5") -> int:
+    def create_timeline_block(self, project_id: int, title: str = "Nuevo evento") -> int:
         with self._tx() as cur:
             cur.execute(
-                "SELECT COALESCE(MAX(z_order), -1) + 1 FROM outline_shapes WHERE project_id = ?",
+                "SELECT COALESCE(MAX(order_index), -1) + 1 FROM timeline_blocks WHERE project_id = ?",
                 (project_id,),
             )
-            next_z = cur.fetchone()[0]
+            next_order = cur.fetchone()[0]
             cur.execute(
-                "INSERT INTO outline_shapes (project_id, shape_type, x, y, w, h, text, color, z_order) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (project_id, shape_type, x, y, w, h, text, color, next_z),
+                "INSERT INTO timeline_blocks (project_id, title, order_index) VALUES (?, ?, ?)",
+                (project_id, title, next_order),
             )
             return cur.lastrowid
 
-    def update_outline_shape(self, shape_id: int, **fields):
-        self._update_row("outline_shapes", shape_id, fields)
+    def update_timeline_block(self, block_id: int, **fields):
+        self._update_row("timeline_blocks", block_id, fields)
 
-    def delete_outline_shape(self, shape_id: int):
+    def delete_timeline_block(self, block_id: int):
         with self._tx() as cur:
-            cur.execute("DELETE FROM outline_shapes WHERE id = ?", (shape_id,))
+            cur.execute("DELETE FROM timeline_blocks WHERE id = ?", (block_id,))
 
-    def list_outline_connections(self, project_id: int) -> list[sqlite3.Row]:
-        cur = self._conn.execute(
-            "SELECT * FROM outline_connections WHERE project_id = ?", (project_id,)
-        )
-        return cur.fetchall()
-
-    def create_outline_connection(self, project_id: int, from_shape_id: int, to_shape_id: int) -> int:
+    def reorder_timeline_blocks(self, project_id: int, ordered_ids: list[int]):
         with self._tx() as cur:
-            cur.execute(
-                "INSERT INTO outline_connections (project_id, from_shape_id, to_shape_id) VALUES (?, ?, ?)",
-                (project_id, from_shape_id, to_shape_id),
-            )
-            return cur.lastrowid
-
-    def delete_outline_connection(self, connection_id: int):
-        with self._tx() as cur:
-            cur.execute("DELETE FROM outline_connections WHERE id = ?", (connection_id,))
+            for index, block_id in enumerate(ordered_ids):
+                cur.execute(
+                    "UPDATE timeline_blocks SET order_index = ? WHERE id = ? AND project_id = ?",
+                    (index, block_id, project_id),
+                )
 
     # ------------------------------------------------------------------ #
     # Notas
