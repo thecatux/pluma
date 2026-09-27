@@ -21,9 +21,9 @@ Principios de diseño:
     reaplica después con mergeCurrentCharFormat(). Es un valor local a
     esa posición exacta del cursor, no un registro global ni el default
     de la app, así que editar una zona vieja del documento con otra
-    fuente nunca se ve afectado por cambios hechos en otra parte. Nunca
-    se toca la alineación (setAlignment en keyPressEvent causa que el
-    siguiente Enter sea ignorado silenciosamente por Qt).
+    fuente nunca se ve afectado por cambios hechos en otra parte. Enter
+    también conserva la alineación del bloque actual en el nuevo bloque,
+    sin usar setAlignment() dentro de keyPressEvent.
   - Los combos de fuente y tamaño se actualizan visualmente desde
     currentCharFormatChanged, bloqueando sus señales para que la
     sincronización no dispare una escritura en el documento.
@@ -35,7 +35,7 @@ Principios de diseño:
 
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any, Callable, Optional
 
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QTextEdit, QFontComboBox,
                                 QComboBox, QColorDialog, QToolBar, QToolButton, QMenu)
@@ -96,19 +96,50 @@ class _FormatCarryingTextEdit(QTextEdit):
     una zona distinta del documento, sea cual sea el orden en que el
     usuario edite.
 
-    No se toca la alineación: llamar a setAlignment() dentro de
-    keyPressEvent hace que Qt ignore silenciosamente el siguiente Enter.
+    La alineación se restaura modificando el formato del bloque con el
+    cursor, no mediante setAlignment(), que puede hacer que Qt ignore
+    silenciosamente el siguiente Enter.
     """
 
-    _FORMAT_SENSITIVE_KEYS = (Qt.Key_Return, Qt.Key_Enter, Qt.Key_Backspace, Qt.Key_Delete)
+    _DELETE_LIKE_KEYS = (Qt.Key_Backspace, Qt.Key_Delete)
 
     def keyPressEvent(self, event):
-        if event.key() not in self._FORMAT_SENSITIVE_KEYS:
+        key = event.key()
+        if key in (Qt.Key_Return, Qt.Key_Enter):
+            self._insert_block_carrying_format()
+            return
+        if key not in self._DELETE_LIKE_KEYS:
             super().keyPressEvent(event)
             return
-        fmt = self.textCursor().charFormat()
-        super().keyPressEvent(event)
-        self.mergeCurrentCharFormat(fmt)
+        cursor = self.textCursor()
+        fmt = cursor.charFormat()
+        if key == Qt.Key_Delete and not cursor.hasSelection() and not cursor.atBlockEnd():
+            next_char = QTextCursor(cursor)
+            next_char.movePosition(QTextCursor.NextCharacter, QTextCursor.KeepAnchor)
+            fmt = next_char.charFormat()
+        cursor.beginEditBlock()
+        try:
+            super().keyPressEvent(event)
+            if not self.textCursor().block().text():
+                self.mergeCurrentCharFormat(fmt)
+        finally:
+            cursor.endEditBlock()
+
+    def _insert_block_carrying_format(self):
+        """Inserta el salto de parrafo de forma atomica, con el
+        charFormat y la alineacion ya fijados en la misma llamada.
+
+        Nunca delega en QTextEdit para Enter: dejar que Qt cree el
+        bloque y "arreglarlo" despues (mergeCurrentCharFormat +
+        cursor.setBlockFormat sobre el bloque ya vacio) deja el
+        control de texto en un estado roto que ignora en silencio
+        todo Enter posterior. cursor.insertBlock(blockFormat,
+        charFormat) evita ese estado por completo y de paso borra la
+        seleccion si la habia, igual que el Enter nativo.
+        """
+        cursor = self.textCursor()
+        cursor.insertBlock(cursor.blockFormat(), cursor.charFormat())
+        self.setTextCursor(cursor)
 
 
 class RichTextEditor(QWidget):
@@ -203,6 +234,7 @@ class RichTextEditor(QWidget):
         action = QAction(text, self)
         if shortcut is not None:
             action.setShortcut(shortcut)
+            action.setShortcutContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
         if status_tip is not None:
             action.setStatusTip(status_tip)
             tooltip = status_tip
@@ -350,8 +382,13 @@ class RichTextEditor(QWidget):
             # lo envuelven; si no, se insertan los dos y el cursor queda listo
             # entre medias para escribir dentro.
             if cursor.hasSelection():
-                selected = cursor.selectedText()
-                cursor.insertText(f"{spec.open_text}{selected}{spec.close_text}")
+                selection_start = cursor.selectionStart()
+                selection_end = cursor.selectionEnd()
+                cursor.setPosition(selection_end)
+                cursor.insertText(spec.close_text)
+                cursor.setPosition(selection_start)
+                cursor.insertText(spec.open_text)
+                cursor.setPosition(selection_end + len(spec.open_text) + len(spec.close_text))
             else:
                 start = cursor.position()
                 cursor.insertText(f"{spec.open_text}{spec.close_text}")
@@ -418,7 +455,7 @@ class RichTextEditor(QWidget):
         if color.isValid():
             self._merge_format(lambda f: f.setForeground(color))
 
-    def _sync_format_actions(self, char_format: QTextCharFormat = None):
+    def _sync_format_actions(self, char_format: Optional[QTextCharFormat] = None):
         """Actualiza los controles de la barra de formato para que reflejen
         el formato en la posicion actual del cursor.
 
@@ -448,7 +485,7 @@ class RichTextEditor(QWidget):
             size = self.text_edit.fontPointSize()
             if size > 0:
                 with self._signals_blocked(self.size_combo):
-                    self.size_combo.setCurrentText(str(int(size)))
+                    self.size_combo.setCurrentText(format(size, "g"))
 
     def _sync_alignment_action(self):
         alignment = self.text_edit.alignment()
