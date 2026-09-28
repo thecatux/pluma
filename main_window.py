@@ -13,6 +13,8 @@ from PySide6.QtWidgets import (QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
 from PySide6.QtCore import Qt, QSize
 from PySide6.QtGui import QFont, QAction, QActionGroup, QKeySequence
 
+import icons
+import theme
 from db import Database
 from project_dialog import ProjectDialog
 from theme import MODE_LABELS
@@ -25,13 +27,13 @@ from panels.notes_panel import NotesPanel
 from panels.settings_panel import SettingsPanel
 
 SECTIONS = [
-    ("info", "📄", "Datos de la novela"),
-    ("chapters", "📖", "Capítulos"),
-    ("characters", "🧑", "Personajes"),
-    ("scenes", "🎬", "Escenas"),
-    ("outline", "🕒", "Línea temporal"),
-    ("notes", "🗒️", "Notas"),
-    ("settings", "⚙️", "Ajustes"),
+    ("info", "info", "Datos de la novela"),
+    ("chapters", "book", "Capítulos"),
+    ("characters", "user", "Personajes"),
+    ("scenes", "clapper", "Escenas"),
+    ("outline", "timeline", "Línea temporal"),
+    ("notes", "note", "Notas"),
+    ("settings", "settings", "Ajustes"),
 ]
 
 
@@ -72,9 +74,17 @@ class MainWindow(QMainWindow):
         header_layout.setContentsMargins(20, 22, 20, 18)
         header_layout.setSpacing(2)
 
-        app_title = QLabel("✒️  Pluma")
+        title_row = QHBoxLayout()
+        title_row.setContentsMargins(0, 0, 0, 0)
+        title_row.setSpacing(8)
+        self.app_icon_label = QLabel()
+        self.app_icon_label.setFixedSize(20, 20)
+        title_row.addWidget(self.app_icon_label)
+        app_title = QLabel("Pluma")
         app_title.setStyleSheet("color: #FFFFFF; font-size: 15pt; font-weight: 700;")
-        header_layout.addWidget(app_title)
+        title_row.addWidget(app_title)
+        title_row.addStretch(1)
+        header_layout.addLayout(title_row)
 
         self.project_label = QLabel("Sin proyecto")
         self.project_label.setStyleSheet("color: #7C8195; font-size: 9.5pt;")
@@ -85,6 +95,7 @@ class MainWindow(QMainWindow):
 
         self.sidebar = QListWidget()
         self.sidebar.setObjectName("Sidebar")
+        self.sidebar.setIconSize(QSize(18, 18))
         font = QFont()
         font.setPointSize(11)
         self.sidebar.setFont(font)
@@ -101,14 +112,32 @@ class MainWindow(QMainWindow):
         self.panels["notes"] = NotesPanel(self.db)
         self.panels["settings"] = SettingsPanel(self.db, self.theme_controller)
 
-        for key, icon, label in SECTIONS:
-            item = QListWidgetItem(f"{icon}   {label}")
+        for key, icon_name, label in SECTIONS:
+            item = QListWidgetItem(f"  {label}")
+            item.setData(Qt.UserRole, icon_name)
             self.sidebar.addItem(item)
             self.stack.addWidget(self.panels[key])
+
+        # Los iconos dependen del color activo (texto de la barra lateral
+        # normal / seleccionado), así que se generan aparte y se
+        # regeneran cuando cambia el tema, en vez de fijarse una vez al
+        # construir la lista.
+        self._refresh_sidebar_icons()
+        theme.signals.changed.connect(self._refresh_sidebar_icons)
 
         layout.addWidget(sidebar_container)
         layout.addWidget(self.stack, 1)
         self.setCentralWidget(central)
+
+    def _refresh_sidebar_icons(self, *_args):
+        c = theme.colors()
+        self.app_icon_label.setPixmap(icons.pixmap("pen", "#FFFFFF", size=20))
+        for row in range(self.sidebar.count()):
+            item = self.sidebar.item(row)
+            icon_name = item.data(Qt.UserRole)
+            item.setIcon(icons.dual_icon(
+                icon_name, c["sidebar_text"], c["sidebar_text_selected"], size=18
+            ))
 
     def _build_menu(self):
         menubar = self.menuBar()

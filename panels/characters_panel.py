@@ -12,8 +12,9 @@ from PySide6.QtWidgets import (QWidget, QHBoxLayout, QVBoxLayout, QListWidget,
                                 QListWidgetItem, QPushButton, QLabel, QLineEdit,
                                 QSplitter, QMessageBox, QScrollArea, QPlainTextEdit,
                                 QInputDialog, QFrame, QStackedWidget)
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt, QTimer, QSize
 
+import icons
 import theme
 from db import DEFAULT_CHARACTER_FIELDS
 from app_settings import settings, signals as settings_signals
@@ -47,9 +48,10 @@ class _FieldRow(QFrame):
         self.name_edit.textEdited.connect(self._changed)
         header.addWidget(self.name_edit, 1)
 
-        self.delete_btn = QPushButton("✕")
+        self.delete_btn = QPushButton()
         self.delete_btn.setProperty("variant", "icon")
-        self.delete_btn.setFixedSize(18, 18)
+        self.delete_btn.setFixedSize(20, 20)
+        self.delete_btn.setIconSize(QSize(13, 13))
         self.delete_btn.setToolTip("Eliminar este campo")
         self.delete_btn.clicked.connect(lambda: on_delete(self))
         header.addWidget(self.delete_btn)
@@ -74,6 +76,7 @@ class _FieldRow(QFrame):
             "font-weight: 600; font-size: 9.5pt; text-transform: uppercase; letter-spacing: 0.3px; "
             f"color: {c['text_secondary']};"
         )
+        self.delete_btn.setIcon(icons.icon("x", c["text_muted"], size=13))
 
     def _autosize(self):
         target = int(self.value_edit.document().size().height()) + 10
@@ -122,9 +125,13 @@ class CharactersPanel(QWidget):
         layout.addWidget(splitter)
 
         self._show_empty_state()
+        theme.signals.changed.connect(self._apply_empty_state_theme)
 
     def _apply_settings(self):
         self._save_timer.setInterval(settings.autosave_interval_ms)
+
+    def _apply_empty_state_theme(self, *_args):
+        self.empty_icon_label.setPixmap(icons.pixmap("user", theme.colors()["text_muted"], size=52))
 
     # ------------------------------------------------------------------ #
     def _build_list_column(self) -> QWidget:
@@ -165,10 +172,10 @@ class CharactersPanel(QWidget):
         empty = QWidget()
         layout = QVBoxLayout(empty)
         layout.addStretch(1)
-        icon = QLabel("🧑")
-        icon.setAlignment(Qt.AlignCenter)
-        icon.setStyleSheet("font-size: 40pt;")
-        layout.addWidget(icon)
+        self.empty_icon_label = QLabel()
+        self.empty_icon_label.setPixmap(icons.pixmap("user", theme.colors()["text_muted"], size=52))
+        self.empty_icon_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(self.empty_icon_label)
         message = QLabel("Todavía no hay personajes")
         message.setAlignment(Qt.AlignCenter)
         message.setStyleSheet("font-size: 13pt; font-weight: 600;")

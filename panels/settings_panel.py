@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, Q
 from PySide6.QtCore import Qt, QUrl
 from PySide6.QtGui import QFontDatabase, QDesktopServices
 
+import icons
 import theme
 from app_settings import settings
 
@@ -260,9 +261,18 @@ class SettingsPanel(QWidget):
         buttons_row.addStretch(1)
         layout.addLayout(buttons_row)
 
+        backup_status_row = QHBoxLayout()
+        backup_status_row.setContentsMargins(0, 0, 0, 0)
+        backup_status_row.setSpacing(4)
+        self.backup_status_icon = QLabel()
+        self.backup_status_icon.setFixedSize(13, 13)
+        self.backup_status_icon.setVisible(False)
+        backup_status_row.addWidget(self.backup_status_icon)
         self.backup_status_label = QLabel("")
         self.backup_status_label.setProperty("role", "muted")
-        layout.addWidget(self.backup_status_label)
+        backup_status_row.addWidget(self.backup_status_label)
+        backup_status_row.addStretch(1)
+        layout.addLayout(backup_status_row)
 
         return card
 
@@ -348,7 +358,9 @@ class SettingsPanel(QWidget):
         except Exception as e:
             QMessageBox.warning(self, "No se pudo crear la copia", str(e))
             return
-        self.backup_status_label.setText(f"✓ Copia guardada en {dest_path}")
+        self.backup_status_icon.setPixmap(icons.pixmap("check", theme.colors()["success"], size=13))
+        self.backup_status_icon.setVisible(True)
+        self.backup_status_label.setText(f"Copia guardada en {dest_path}")
 
     # ------------------------------------------------------------------ #
     # Interfaz esperada por MainWindow (no depende de un proyecto)

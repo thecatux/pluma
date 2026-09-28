@@ -23,9 +23,10 @@ from PySide6.QtWidgets import (QWidget, QHBoxLayout, QVBoxLayout, QListWidget,
                                 QListWidgetItem, QAbstractItemView, QPushButton,
                                 QLabel, QLineEdit, QSplitter, QMessageBox, QPlainTextEdit,
                                 QStackedWidget, QFrame, QToolButton)
-from PySide6.QtCore import Qt, QTimer, QEvent
+from PySide6.QtCore import Qt, QTimer, QEvent, QSize
 from PySide6.QtGui import QKeySequence, QShortcut
 
+import icons
 import theme
 from editor_widget import RichTextEditor
 from app_settings import settings, signals as settings_signals
@@ -55,7 +56,7 @@ class ChaptersPanel(QWidget):
         self._status_timer = QTimer(self)
         self._status_timer.setSingleShot(True)
         self._status_timer.setInterval(1800)
-        self._status_timer.timeout.connect(lambda: self.save_status_label.setText(""))
+        self._status_timer.timeout.connect(self._clear_save_status)
 
         self.list_column = self._build_list_column()
 
@@ -92,6 +93,10 @@ class ChaptersPanel(QWidget):
             f"QToolButton {{ border: none; color: {c['text_secondary']}; font-weight: 600; padding: 2px 0; }}"
             f"QToolButton:hover {{ color: {c['text']}; }}"
         )
+        self._icon_color = c["text_secondary"]
+        self._refresh_synopsis_icon()
+        self._refresh_focus_icon()
+        self.empty_icon_label.setPixmap(icons.pixmap("book", c["text_muted"], size=52))
 
     # ------------------------------------------------------------------ #
     # Construcción de la UI
@@ -147,10 +152,9 @@ class ChaptersPanel(QWidget):
         empty = QWidget()
         layout = QVBoxLayout(empty)
         layout.addStretch(1)
-        icon = QLabel("📖")
-        icon.setAlignment(Qt.AlignCenter)
-        icon.setStyleSheet("font-size: 40pt;")
-        layout.addWidget(icon)
+        self.empty_icon_label = QLabel()
+        self.empty_icon_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(self.empty_icon_label)
         message = QLabel("Todavía no hay capítulos")
         message.setAlignment(Qt.AlignCenter)
         message.setStyleSheet("font-size: 13pt; font-weight: 600;")
@@ -193,12 +197,22 @@ class ChaptersPanel(QWidget):
         self.title_edit.textEdited.connect(self._on_title_edited)
         header_row.addWidget(self.title_edit, 1)
 
+        save_status = QWidget()
+        save_status_layout = QHBoxLayout(save_status)
+        save_status_layout.setContentsMargins(0, 0, 0, 0)
+        save_status_layout.setSpacing(4)
+        self.save_status_icon = QLabel()
+        self.save_status_icon.setFixedSize(12, 12)
+        self.save_status_icon.setVisible(False)
+        save_status_layout.addWidget(self.save_status_icon)
         self.save_status_label = QLabel("")
         self.save_status_label.setProperty("role", "muted")
-        header_row.addWidget(self.save_status_label)
+        save_status_layout.addWidget(self.save_status_label)
+        header_row.addWidget(save_status)
 
         self.focus_button = QToolButton()
-        self.focus_button.setText("⤢  Modo enfoque")
+        self.focus_button.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        self.focus_button.setText("Modo enfoque")
         self.focus_button.setCheckable(True)
         self.focus_button.setCursor(Qt.PointingHandCursor)
         self.focus_button.setToolTip(
@@ -217,7 +231,8 @@ class ChaptersPanel(QWidget):
         content_layout = self._content_layout
 
         self.synopsis_toggle = QToolButton()
-        self.synopsis_toggle.setText("▸  Sinopsis (opcional)")
+        self.synopsis_toggle.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        self.synopsis_toggle.setText("Sinopsis (opcional)")
         self.synopsis_toggle.setCheckable(True)
         self.synopsis_toggle.setCursor(Qt.PointingHandCursor)
         self.synopsis_toggle.toggled.connect(self._on_synopsis_toggled)
@@ -276,8 +291,16 @@ class ChaptersPanel(QWidget):
         return dot
 
     def _on_synopsis_toggled(self, checked: bool):
-        self.synopsis_toggle.setText(("▾" if checked else "▸") + "  Sinopsis (opcional)")
+        self._refresh_synopsis_icon()
         self.synopsis_edit.setVisible(checked)
+
+    def _refresh_synopsis_icon(self):
+        name = "chevron-down" if self.synopsis_toggle.isChecked() else "chevron-right"
+        self.synopsis_toggle.setIcon(icons.icon(name, self._icon_color, size=14))
+
+    def _refresh_focus_icon(self):
+        name = "x" if self.focus_button.isChecked() else "expand"
+        self.focus_button.setIcon(icons.icon(name, self._icon_color, size=14))
 
     # ------------------------------------------------------------------ #
     # Modo enfoque
@@ -286,7 +309,8 @@ class ChaptersPanel(QWidget):
         self._focus_mode = checked
         self.list_column.setVisible(not checked)
         self.toolbar_frame.setVisible(not checked)
-        self.focus_button.setText("✕  Salir del enfoque" if checked else "⤢  Modo enfoque")
+        self.focus_button.setText("Salir del enfoque" if checked else "Modo enfoque")
+        self._refresh_focus_icon()
         if checked:
             self._update_focus_margins()
         else:
@@ -372,7 +396,7 @@ class ChaptersPanel(QWidget):
         self.synopsis_edit.setPlainText(row["synopsis"])
         self.synopsis_toggle.setChecked(bool(row["synopsis"]))
         self.editor.set_html(row["content"])
-        self.save_status_label.setText("")
+        self._clear_save_status()
         self._loading = False
         self.right_stack.setCurrentIndex(1)
         self.remove_button.setEnabled(True)
@@ -412,9 +436,14 @@ class ChaptersPanel(QWidget):
     # ------------------------------------------------------------------ #
     # Autoguardado
     # ------------------------------------------------------------------ #
+    def _clear_save_status(self):
+        self.save_status_icon.setVisible(False)
+        self.save_status_label.setText("")
+
     def _schedule_save(self):
         if self._loading or self._current_chapter_id is None:
             return
+        self.save_status_icon.setVisible(False)
         self.save_status_label.setText("Escribiendo…")
         self._save_timer.start()
 
@@ -437,7 +466,9 @@ class ChaptersPanel(QWidget):
             word_count=self.editor.word_count(),
         )
         self._refresh_total_words()
-        self.save_status_label.setText("✓ Guardado")
+        self.save_status_icon.setPixmap(icons.pixmap("check", theme.colors()["success"], size=12))
+        self.save_status_icon.setVisible(True)
+        self.save_status_label.setText("Guardado")
         self._status_timer.start()
 
     def _flush_pending_save(self):

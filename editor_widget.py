@@ -39,8 +39,11 @@ from typing import Any, Callable, Optional
 
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QTextEdit, QFontComboBox,
                                 QComboBox, QColorDialog, QToolBar, QToolButton, QMenu)
-from PySide6.QtGui import QAction, QKeySequence, QFont, QTextCharFormat, QActionGroup, QTextCursor
+from PySide6.QtGui import QAction, QKeySequence, QFont, QTextCharFormat, QActionGroup, QTextCursor, QIcon
 from PySide6.QtCore import Qt, QSize, Signal
+
+import icons
+import theme
 
 
 @dataclass(frozen=True)
@@ -173,6 +176,13 @@ class RichTextEditor(QWidget):
         _AlignmentOption("Justificar", Qt.AlignJustify, "Justificar texto"),
     )
 
+    _ALIGN_ICON_NAMES = {
+        "Alinear izquierda": "align-left",
+        "Centrar": "align-center",
+        "Alinear derecha": "align-right",
+        "Justificar": "align-justify",
+    }
+
     # La raya de diálogo es la acción por defecto del botón (ver
     # create_special_chars_button); el resto vive en el desplegable.
     DEFAULT_SPECIAL_CHAR_KEY = "dash_em"
@@ -226,6 +236,9 @@ class RichTextEditor(QWidget):
 
         self._sync_format_actions()
         self._sync_alignment_action()
+
+        self._refresh_align_icons()
+        theme.signals.changed.connect(self._refresh_align_icons)
 
     # ------------------------------------------------------------------ #
     # Creacion de acciones
@@ -311,11 +324,10 @@ class RichTextEditor(QWidget):
             toolbar.addWidget(self._glyph_button(action, fmt.key))
 
         toolbar.addSeparator()
-        align_labels = {"Alinear izquierda": "◇", "Centrar": "☰", "Alinear derecha": "◈", "Justificar": "▤"}
         for opt in self._ALIGNMENTS:
             action = self.align_actions[opt.alignment]
-            action.setText(align_labels.get(opt.label, opt.label))
-            toolbar.addAction(action)
+            action.setText("")
+            toolbar.addWidget(self._icon_only_button(action))
         toolbar.addSeparator()
         toolbar.addWidget(self.create_special_chars_button(toolbar))
         toolbar.addSeparator()
@@ -323,6 +335,22 @@ class RichTextEditor(QWidget):
         toolbar.addWidget(self.size_combo)
         toolbar.addAction(self.color_action)
         return toolbar
+
+    def _icon_only_button(self, action: QAction) -> QToolButton:
+        button = QToolButton()
+        button.setDefaultAction(action)
+        button.setToolButtonStyle(Qt.ToolButtonIconOnly)
+        return button
+
+    def _refresh_align_icons(self, *_args):
+        c = theme.colors()
+        for opt in self._ALIGNMENTS:
+            action = self.align_actions[opt.alignment]
+            name = self._ALIGN_ICON_NAMES[opt.label]
+            align_icon = QIcon()
+            align_icon.addPixmap(icons.pixmap(name, c["text"], size=16), QIcon.Normal, QIcon.Off)
+            align_icon.addPixmap(icons.pixmap(name, c["primary_pressed"], size=16), QIcon.Normal, QIcon.On)
+            action.setIcon(align_icon)
 
     def _glyph_button(self, action: QAction, key: str):
         button = QToolButton()

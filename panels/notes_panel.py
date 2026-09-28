@@ -11,6 +11,8 @@ from PySide6.QtWidgets import (QWidget, QHBoxLayout, QVBoxLayout, QListWidget,
                                 QSplitter, QMessageBox, QStackedWidget, QFrame)
 from PySide6.QtCore import Qt, QTimer
 
+import icons
+import theme
 from editor_widget import RichTextEditor
 from app_settings import settings, signals as settings_signals
 
@@ -40,9 +42,13 @@ class NotesPanel(QWidget):
         layout.addWidget(splitter)
 
         self._show_empty_state()
+        theme.signals.changed.connect(self._apply_empty_state_theme)
 
     def _apply_settings(self):
         self._save_timer.setInterval(settings.autosave_interval_ms)
+
+    def _apply_empty_state_theme(self, *_args):
+        self.empty_icon_label.setPixmap(icons.pixmap("note", theme.colors()["text_muted"], size=52))
 
     # ------------------------------------------------------------------ #
     def _build_list_column(self) -> QWidget:
@@ -83,10 +89,10 @@ class NotesPanel(QWidget):
         empty = QWidget()
         layout = QVBoxLayout(empty)
         layout.addStretch(1)
-        icon = QLabel("🗒️")
-        icon.setAlignment(Qt.AlignCenter)
-        icon.setStyleSheet("font-size: 40pt;")
-        layout.addWidget(icon)
+        self.empty_icon_label = QLabel()
+        self.empty_icon_label.setPixmap(icons.pixmap("note", theme.colors()["text_muted"], size=52))
+        self.empty_icon_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(self.empty_icon_label)
         message = QLabel("Todavía no hay notas")
         message.setAlignment(Qt.AlignCenter)
         message.setStyleSheet("font-size: 13pt; font-weight: 600;")

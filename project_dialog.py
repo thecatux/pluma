@@ -11,7 +11,10 @@ el `project_id` con el que se filtran capítulos, personajes, etc.
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QListWidget,
                                 QListWidgetItem, QPushButton, QLabel, QInputDialog,
                                 QMessageBox, QLineEdit, QStackedWidget, QWidget)
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QSize
+
+import icons
+import theme
 
 
 class ProjectDialog(QDialog):
@@ -28,9 +31,16 @@ class ProjectDialog(QDialog):
         layout.setContentsMargins(24, 24, 24, 20)
         layout.setSpacing(12)
 
-        title = QLabel("✒️  Tus novelas")
+        title_row = QHBoxLayout()
+        title_row.setSpacing(8)
+        title_icon = QLabel()
+        title_icon.setPixmap(icons.pixmap("pen", theme.colors()["text"], size=20))
+        title_row.addWidget(title_icon)
+        title = QLabel("Tus novelas")
         title.setStyleSheet("font-size: 16pt; font-weight: 700;")
-        layout.addWidget(title)
+        title_row.addWidget(title)
+        title_row.addStretch(1)
+        layout.addLayout(title_row)
         subtitle = QLabel("Elige un proyecto para continuar o crea uno nuevo.")
         subtitle.setProperty("role", "hint")
         layout.addWidget(subtitle)
@@ -69,6 +79,7 @@ class ProjectDialog(QDialog):
     def _build_list_widget(self) -> QWidget:
         self.list_widget = QListWidget()
         self.list_widget.setSpacing(2)
+        self.list_widget.setIconSize(QSize(18, 18))
         self.list_widget.itemDoubleClicked.connect(self._open_selected)
         return self.list_widget
 
@@ -76,9 +87,9 @@ class ProjectDialog(QDialog):
         empty = QWidget()
         layout = QVBoxLayout(empty)
         layout.addStretch(1)
-        icon = QLabel("📚")
+        icon = QLabel()
+        icon.setPixmap(icons.pixmap("library", theme.colors()["text_muted"], size=48))
         icon.setAlignment(Qt.AlignCenter)
-        icon.setStyleSheet("font-size: 36pt;")
         layout.addWidget(icon)
         message = QLabel("Todavía no has creado ninguna novela")
         message.setAlignment(Qt.AlignCenter)
@@ -95,9 +106,11 @@ class ProjectDialog(QDialog):
         self.list_widget.clear()
         projects = self.db.list_projects()
         target_row = None
+        book_icon = icons.icon("book", theme.colors()["text_secondary"], size=18)
         for row in projects:
             when = row["last_opened_at"] or row["created_at"] or ""
-            item = QListWidgetItem(f"📖  {row['name']}\n     Última apertura: {when}" if when else f"📖  {row['name']}")
+            item = QListWidgetItem(f"{row['name']}\nÚltima apertura: {when}" if when else row["name"])
+            item.setIcon(book_icon)
             item.setData(Qt.UserRole, row["id"])
             self.list_widget.addItem(item)
             if select_id is not None and row["id"] == select_id:

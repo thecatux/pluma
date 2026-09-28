@@ -18,8 +18,9 @@ from PySide6.QtWidgets import (QWidget, QFrame, QVBoxLayout, QHBoxLayout, QLabel
                                 QLineEdit, QPlainTextEdit, QComboBox, QPushButton,
                                 QListWidget, QListWidgetItem, QListView, QAbstractItemView,
                                 QSizePolicy)
-from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtCore import Qt, QTimer, Signal, QSize
 
+import icons
 import theme
 from app_settings import settings, signals as settings_signals
 
@@ -69,12 +70,13 @@ class _BlockCard(QFrame):
         self.title_edit.setStyleSheet("border: none; background: transparent; font-weight: 600;")
         self.title_edit.textEdited.connect(self._schedule_save)
         header.addWidget(self.title_edit, 1)
-        delete_btn = QPushButton("✕")
-        delete_btn.setProperty("variant", "icon")
-        delete_btn.setFixedSize(18, 18)
-        delete_btn.setToolTip("Eliminar este evento")
-        delete_btn.clicked.connect(lambda: self._on_delete(self.block_id))
-        header.addWidget(delete_btn)
+        self.delete_btn = QPushButton()
+        self.delete_btn.setProperty("variant", "icon")
+        self.delete_btn.setFixedSize(20, 20)
+        self.delete_btn.setIconSize(QSize(13, 13))
+        self.delete_btn.setToolTip("Eliminar este evento")
+        self.delete_btn.clicked.connect(lambda: self._on_delete(self.block_id))
+        header.addWidget(self.delete_btn)
         layout.addLayout(header)
 
         self.date_edit = QLineEdit(date_label)
@@ -111,6 +113,7 @@ class _BlockCard(QFrame):
             f"_BlockCard {{ background: {c['surface']}; border: 1px solid {c['border']}; "
             f"border-left: 4px solid {self._group_color}; border-radius: {theme.RADIUS['md']}px; }}"
         )
+        self.delete_btn.setIcon(icons.icon("x", c["text_muted"], size=13))
 
     def _autosize_note(self):
         target = int(self.note_edit.document().size().height()) + 8
