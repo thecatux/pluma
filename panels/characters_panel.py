@@ -10,93 +10,15 @@ quiera con "+ Añadir campo".
 
 from PySide6.QtWidgets import (QWidget, QHBoxLayout, QVBoxLayout, QListWidget,
                                 QListWidgetItem, QPushButton, QLabel, QLineEdit,
-                                QSplitter, QMessageBox, QScrollArea, QPlainTextEdit,
-                                QInputDialog, QFrame, QStackedWidget)
-from PySide6.QtCore import Qt, QTimer, QSize
+                                QSplitter, QMessageBox, QScrollArea, QInputDialog,
+                                QStackedWidget)
+from PySide6.QtCore import Qt, QTimer
 
 import icons
 import theme
 from db import DEFAULT_CHARACTER_FIELDS
+from panels.field_row import FieldRow
 from app_settings import settings, signals as settings_signals
-
-
-class _FieldRow(QFrame):
-    """Una tarjeta compacta de la ficha: nombre del campo + valor + borrar.
-
-    El campo de valor se ajusta automáticamente a su contenido (entre
-    una y varias líneas) en lugar de reservar siempre un hueco fijo,
-    para que fichas con muchos campos cortos ocupen mucho menos
-    espacio y sean más rápidas de escanear.
-    """
-
-    MIN_VALUE_HEIGHT = 30
-    MAX_VALUE_HEIGHT = 200
-
-    def __init__(self, field_id, field_name, field_value, on_change, on_delete, parent=None):
-        super().__init__(parent)
-        self.field_id = field_id
-        self._on_change = on_change
-        self.setProperty("role", "field-row")
-
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(10, 7, 6, 7)
-        layout.setSpacing(3)
-
-        header = QHBoxLayout()
-        header.setSpacing(4)
-        self.name_edit = QLineEdit(field_name)
-        self.name_edit.textEdited.connect(self._changed)
-        header.addWidget(self.name_edit, 1)
-
-        self.delete_btn = QPushButton()
-        self.delete_btn.setProperty("variant", "icon")
-        self.delete_btn.setFixedSize(20, 20)
-        self.delete_btn.setIconSize(QSize(13, 13))
-        self.delete_btn.setToolTip("Eliminar este campo")
-        self.delete_btn.clicked.connect(lambda: on_delete(self))
-        header.addWidget(self.delete_btn)
-        layout.addLayout(header)
-
-        self.value_edit = QPlainTextEdit(field_value)
-        self.value_edit.setPlaceholderText("Sin completar todavía…")
-        self.value_edit.setStyleSheet("background: transparent; border: none; padding: 0;")
-        self.value_edit.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.value_edit.textChanged.connect(self._autosize)
-        self.value_edit.textChanged.connect(self._changed)
-        layout.addWidget(self.value_edit)
-
-        self._apply_theme()
-        self._autosize()
-        theme.signals.changed.connect(self._apply_theme)
-
-    def _apply_theme(self, *_args):
-        c = theme.colors()
-        self.name_edit.setStyleSheet(
-            "border: none; background: transparent; padding: 2px 0;"
-            "font-weight: 600; font-size: 9.5pt; text-transform: uppercase; letter-spacing: 0.3px; "
-            f"color: {c['text_secondary']};"
-        )
-        self.delete_btn.setIcon(icons.icon("x", c["text_muted"], size=13))
-
-    def _autosize(self):
-        target = int(self.value_edit.document().size().height()) + 10
-        target = max(self.MIN_VALUE_HEIGHT, min(self.MAX_VALUE_HEIGHT, target))
-        self.value_edit.setFixedHeight(target)
-
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        # El ancho disponible cambia el número de líneas envueltas, así
-        # que hay que recalcular la altura tras cada redimensionado.
-        self._autosize()
-
-    def _changed(self, *_args):
-        self._on_change(self)
-
-    def field_name(self) -> str:
-        return self.name_edit.text().strip() or "Campo"
-
-    def field_value(self) -> str:
-        return self.value_edit.toPlainText()
 
 
 class CharactersPanel(QWidget):
@@ -106,7 +28,7 @@ class CharactersPanel(QWidget):
         self.project_id = None
         self._current_character_id = None
         self._loading = False
-        self._field_rows: list[_FieldRow] = []
+        self._field_rows: list[FieldRow] = []
 
         self._save_timer = QTimer(self)
         self._save_timer.setSingleShot(True)
@@ -302,7 +224,7 @@ class CharactersPanel(QWidget):
         self._field_rows = []
 
     def _add_field_row(self, field_id, field_name, field_value):
-        row = _FieldRow(field_id, field_name, field_value, self._on_field_changed, self._on_field_delete)
+        row = FieldRow(field_id, field_name, field_value, self._on_field_changed, self._on_field_delete)
         self.fields_layout.insertWidget(self.fields_layout.count() - 1, row)
         self._field_rows.append(row)
         return row
@@ -319,10 +241,10 @@ class CharactersPanel(QWidget):
         self._update_avatar(text)
         self._schedule_save()
 
-    def _on_field_changed(self, row: _FieldRow):
+    def _on_field_changed(self, row: FieldRow):
         self._schedule_save()
 
-    def _on_field_delete(self, row: _FieldRow):
+    def _on_field_delete(self, row: FieldRow):
         if row.field_id is not None:
             self.db.delete_character_field(row.field_id)
         self.fields_layout.removeWidget(row)

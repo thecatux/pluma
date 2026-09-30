@@ -18,7 +18,7 @@ from PySide6.QtCore import Qt, QTimer, QRect, QPoint, QSize
 import icons
 import theme
 from db import DEFAULT_SCENE_FIELDS
-from panels.characters_panel import _FieldRow
+from panels.field_row import FieldRow
 from app_settings import settings, signals as settings_signals
 
 
@@ -117,7 +117,7 @@ class ScenesPanel(QWidget):
         self.project_id = None
         self._current_scene_id = None
         self._loading = False
-        self._field_rows: list[_FieldRow] = []
+        self._field_rows: list[FieldRow] = []
 
         self._save_timer = QTimer(self)
         self._save_timer.setSingleShot(True)
@@ -360,7 +360,7 @@ class ScenesPanel(QWidget):
         self._field_rows = []
 
     def _add_field_row(self, field_id, field_name, field_value):
-        row = _FieldRow(field_id, field_name, field_value, self._on_field_changed, self._on_field_delete)
+        row = FieldRow(field_id, field_name, field_value, self._on_field_changed, self._on_field_delete)
         self.fields_layout.insertWidget(self.fields_layout.count() - 1, row)
         self._field_rows.append(row)
         return row
@@ -383,10 +383,10 @@ class ScenesPanel(QWidget):
         self.db.set_scene_chapter_links(self._current_scene_id, linked)
         self._refresh_current_list_item()
 
-    def _on_field_changed(self, row: _FieldRow):
+    def _on_field_changed(self, row: FieldRow):
         self._schedule_save()
 
-    def _on_field_delete(self, row: _FieldRow):
+    def _on_field_delete(self, row: FieldRow):
         if row.field_id is not None:
             self.db.delete_scene_field(row.field_id)
         self.fields_layout.removeWidget(row)
