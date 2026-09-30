@@ -94,12 +94,12 @@ class InfoPanel(QWidget):
         self.genre_combo.currentIndexChanged.connect(self._schedule_save)
         form.addRow("Género", self.genre_combo)
 
-        self.page_count_spin = QSpinBox()
-        self.page_count_spin.setRange(0, 20000)
-        self.page_count_spin.setSuffix(" páginas")
-        self.page_count_spin.setSpecialValueText("Sin especificar")
-        self.page_count_spin.valueChanged.connect(self._schedule_save)
-        form.addRow("Extensión estimada", self.page_count_spin)
+        self.chapter_count_spin = QSpinBox()
+        self.chapter_count_spin.setRange(0, 20000)
+        self.chapter_count_spin.setSuffix(" capítulos")
+        self.chapter_count_spin.setSpecialValueText("Sin especificar")
+        self.chapter_count_spin.valueChanged.connect(self._schedule_save)
+        form.addRow("Extensión estimada", self.chapter_count_spin)
 
         card_layout.addLayout(form)
 
@@ -142,7 +142,7 @@ class InfoPanel(QWidget):
         genre_index = self.genre_combo.findData(row["genre"])
         self.genre_combo.setCurrentIndex(genre_index if genre_index >= 0 else 0)
         self.synopsis_edit.setPlainText(row["synopsis"])
-        self.page_count_spin.setValue(row["page_count"])
+        self.chapter_count_spin.setValue(row["page_count"]) # page_count es un nombre desactualizado
         self._loading = False
 
     # ------------------------------------------------------------------ #
@@ -162,7 +162,7 @@ class InfoPanel(QWidget):
             author=self.author_edit.text().strip(),
             genre=self.genre_combo.currentData() or "",
             synopsis=self.synopsis_edit.toPlainText(),
-            page_count=self.page_count_spin.value(),
+            page_count=self.chapter_count_spin.value(),
         )
 
     def _flush_pending_save(self):

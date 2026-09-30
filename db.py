@@ -183,7 +183,10 @@ class Database:
                     date_label TEXT NOT NULL DEFAULT '',
                     group_name TEXT NOT NULL DEFAULT '',
                     description TEXT NOT NULL DEFAULT '',
-                    order_index INTEGER NOT NULL DEFAULT 0
+                    order_index INTEGER NOT NULL DEFAULT 0,
+                    color TEXT NOT NULL DEFAULT '',
+                    is_milestone INTEGER NOT NULL DEFAULT 0,
+                    chapter_id INTEGER REFERENCES chapters(id) ON DELETE SET NULL
                 );
 
                 CREATE TABLE IF NOT EXISTS notes (
@@ -214,6 +217,7 @@ class Database:
             )
         self._migrate_project_info_columns()
         self._migrate_chapter_word_count()
+        self._migrate_timeline_columns()
 
     def _migrate_project_info_columns(self):
         """Añade a `projects` las columnas de la ficha de la novela si la
@@ -249,6 +253,23 @@ class Database:
             existing_columns = {row[1] for row in cur.fetchall()}
             if "word_count" not in existing_columns:
                 cur.execute("ALTER TABLE chapters ADD COLUMN word_count INTEGER NOT NULL DEFAULT 0")
+
+    def _migrate_timeline_columns(self):
+        """Añade a `timeline_blocks` las columnas del lienzo (color
+        manual, hito y capítulo vinculado) si la base de datos es de una
+        versión anterior. Si se borra el capítulo vinculado, el bloque
+        se conserva y `chapter_id` pasa a NULL."""
+        with self._tx() as cur:
+            cur.execute("PRAGMA table_info(timeline_blocks)")
+            existing_columns = {row[1] for row in cur.fetchall()}
+            missing_columns = {
+                "color": "TEXT NOT NULL DEFAULT ''",
+                "is_milestone": "INTEGER NOT NULL DEFAULT 0",
+                "chapter_id": "INTEGER REFERENCES chapters(id) ON DELETE SET NULL",
+            }
+            for column, ddl in missing_columns.items():
+                if column not in existing_columns:
+                    cur.execute(f"ALTER TABLE timeline_blocks ADD COLUMN {column} {ddl}")
 
     @contextmanager
     def _tx(self):
@@ -556,6 +577,27 @@ class Database:
 
     def update_timeline_block(self, block_id: int, **fields):
         self._update_row("timeline_blocks", block_id, fields)
+
+    def duplicate_timeline_block(self, block_id: int) -> Optional[int]:
+        """Copia un bloque justo detrás del original y devuelve el id de la copia."""
+        with self._tx() as cur:
+            cur.execute("SELECT * FROM timeline_blocks WHERE id = ?", (block_id,))
+            row = cur.fetchone()
+            if row is None:
+                return None
+            cur.execute(
+                "UPDATE timeline_blocks SET order_index = order_index + 1 "
+                "WHERE project_id = ? AND order_index > ?",
+                (row["project_id"], row["order_index"]),
+            )
+            cur.execute(
+                "INSERT INTO timeline_blocks (project_id, title, date_label, group_name, description, "
+                "order_index, color, is_milestone, chapter_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (row["project_id"], f"{row['title']} (copia)", row["date_label"], row["group_name"],
+                 row["description"], row["order_index"] + 1, row["color"], row["is_milestone"],
+                 row["chapter_id"]),
+            )
+            return cur.lastrowid
 
     def delete_timeline_block(self, block_id: int):
         with self._tx() as cur:

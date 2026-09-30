@@ -106,6 +106,31 @@ _ICON_BODIES = {
         '<polyline points="3,16 3,21 8,21"/><polyline points="21,16 21,21 16,21"/>'
     ),
 
+    # -- Línea temporal (lienzo) ------------------------------------------ #
+    "plus": '<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>',
+    "minus": '<line x1="5" y1="12" x2="19" y2="12"/>',
+    "star": '<polygon points="12,3.5 14.7,9.2 21,10 16.4,14.3 17.6,20.5 12,17.5 6.4,20.5 7.6,14.3 3,10 9.3,9.2" fill="{color}"/>',
+    "lanes": (
+        '<line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/>'
+        '<line x1="3" y1="18" x2="21" y2="18"/>'
+        '<circle cx="7" cy="6" r="1.7" fill="{color}" stroke="none"/>'
+        '<circle cx="15" cy="12" r="1.7" fill="{color}" stroke="none"/>'
+        '<circle cx="10" cy="18" r="1.7" fill="{color}" stroke="none"/>'
+    ),
+    "image": (
+        '<rect x="3.5" y="4.5" width="17" height="15" rx="2"/><circle cx="9" cy="10" r="1.6"/>'
+        '<polyline points="4,18 10,13 14,17 17,14 20,17"/>'
+    ),
+    "search": '<circle cx="11" cy="11" r="6.5"/><line x1="16" y1="16" x2="20.5" y2="20.5"/>',
+    "copy": (
+        '<rect x="8.5" y="8.5" width="11.5" height="11.5" rx="2"/>'
+        '<path d="M15.5 8.5V6.5c0-1.1-.9-2-2-2H6.5c-1.1 0-2 .9-2 2v7c0 1.1.9 2 2 2h2"/>'
+    ),
+    "trash": (
+        '<line x1="4" y1="7" x2="20" y2="7"/><path d="M9 7V4.5h6V7"/><path d="M6.5 7l1 13h9l1-13"/>'
+        '<line x1="10.5" y1="11" x2="10.5" y2="16"/><line x1="13.5" y1="11" x2="13.5" y2="16"/>'
+    ),
+
     # -- Alineación del editor de texto ---------------------------------- #
     "align-left": (
         '<line x1="4" y1="5" x2="20" y2="5"/><line x1="4" y1="10" x2="14" y2="10"/>'
