@@ -54,7 +54,11 @@ class OutlinePanel(QWidget):
         self.project_id = project_id
         self._reload(reset_view=True)
 
+    def refresh(self):
+        self._reload()
+
     def _reload(self, reset_view=False, select_id=None, focus_title=False):
+        self.canvas.flush_pending_saves()
         if self.project_id:
             rows = self.db.list_timeline_blocks(self.project_id)
             chapters = [(r["id"], r["title"]) for r in self.db.list_chapters(self.project_id)]

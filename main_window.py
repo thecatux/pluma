@@ -180,7 +180,18 @@ class MainWindow(QMainWindow):
 
     # ------------------------------------------------------------------ #
     def _on_section_changed(self, row: int):
+        previous_row = self.stack.currentIndex()
+        if previous_row != row and 0 <= previous_row < len(SECTIONS):
+            previous_key = SECTIONS[previous_row][0]
+            flush = getattr(self.panels[previous_key], "_flush_pending_save", None)
+            if callable(flush):
+                flush()
         self.stack.setCurrentIndex(row)
+        if 0 <= row < len(SECTIONS):
+            current_key = SECTIONS[row][0]
+            refresh = getattr(self.panels[current_key], "refresh", None)
+            if callable(refresh):
+                refresh()
 
     def load_project(self, project_id: int, project_name: str):
         self.project_id = project_id
