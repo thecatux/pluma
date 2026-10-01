@@ -101,6 +101,10 @@ _ICON_BODIES = {
     "check": '<polyline points="5,13 9.5,17.5 19,7"/>',
     "chevron-right": '<polyline points="9,5 15,12 9,19"/>',
     "chevron-down": '<polyline points="5,9 12,15 19,9"/>',
+    "sidebar": (
+        '<rect x="3.5" y="4.5" width="17" height="15" rx="2"/>'
+        '<line x1="9.5" y1="4.5" x2="9.5" y2="19.5"/>'
+    ),
     "expand": (
         '<polyline points="8,3 3,3 3,8"/><polyline points="16,3 21,3 21,8"/>'
         '<polyline points="3,16 3,21 8,21"/><polyline points="21,16 21,21 16,21"/>'

@@ -20,59 +20,70 @@ FONT_FAMILY_SERIF = '"Georgia", "Iowan Old Style", "Palatino Linotype", serif'
 
 RADIUS = {"sm": 6, "md": 8, "lg": 12, "xl": 16}
 
-# Paleta clara (la original de Pluma).
+# Paleta clara: fondos de papel cálido en lugar de gris frío, con un
+# índigo contenido como único color de acento. Los textos secundarios
+# mantienen al menos 4.5:1 de contraste sobre las superficies.
 _LIGHT = {
-    "bg": "#F4F5F7",
+    "bg": "#F5F3EF",
     "surface": "#FFFFFF",
-    "surface_alt": "#F8F9FB",
-    "border": "#E3E6EA",
-    "border_strong": "#D4D8DE",
-    "text": "#22252A",
-    "text_secondary": "#6B7280",
-    "text_muted": "#A1A8B3",
-    "primary": "#4C6EF5",
-    "primary_hover": "#4059DB",
+    "surface_alt": "#FAF8F5",
+    "border": "#E8E4DD",
+    "border_strong": "#D8D3CA",
+    "text": "#25231F",
+    "text_secondary": "#6A655D",
+    "text_muted": "#8E887E",
+    "primary": "#4263EB",
+    "primary_hover": "#3B5BDB",
     "primary_pressed": "#364FC7",
-    "primary_light": "#EDF1FF",
-    "primary_border": "#C6D2FF",
-    "danger": "#E03131",
-    "danger_hover": "#C92A2A",
-    "danger_light": "#FFF0F0",
-    "success": "#2F9E44",
-    "sidebar_bg": "#1B1E2B",
-    "sidebar_bg_hover": "#262A3B",
-    "sidebar_bg_selected": "#4C6EF5",
-    "sidebar_text": "#C7CBDA",
-    "sidebar_text_muted": "#7C8195",
+    "primary_light": "#ECEFFD",
+    "primary_border": "#C7D0F8",
+    # Texto/iconos sobre `primary_light` (selecciones, chips activos) y
+    # sobre `primary` (botones principales). Separados de
+    # `primary_pressed` porque en el tema oscuro el texto sobre un fondo
+    # tintado necesita ser claro y el fondo pulsado de un botón, no.
+    "primary_text": "#364FC7",
+    "on_primary": "#FFFFFF",
+    "danger": "#C92F2F",
+    "danger_hover": "#B02525",
+    "danger_light": "#FDEDED",
+    "success": "#2B8A3E",
+    "sidebar_bg": "#1E2130",
+    "sidebar_bg_hover": "#2A2E42",
+    "sidebar_bg_selected": "#4263EB",
+    "sidebar_text": "#C9CDDB",
+    "sidebar_text_muted": "#8A90A6",
     "sidebar_text_selected": "#FFFFFF",
 }
 
-# Paleta oscura. La barra lateral ya era oscura de por sí, así que se
-# mantiene prácticamente igual (es la identidad visual de Pluma); lo
-# que cambia es el resto de la interfaz.
+# Paleta oscura: grises azulados suaves (nada de negro puro) y un
+# acento algo más profundo que el claro para que el texto blanco de los
+# botones principales siga siendo legible. La barra lateral sigue
+# siendo la identidad visual de Pluma, un poco más oscura que el fondo.
 _DARK = {
-    "bg": "#15171F",
-    "surface": "#1E212D",
-    "surface_alt": "#262A38",
-    "border": "#333747",
-    "border_strong": "#40465A",
-    "text": "#E7E9EE",
-    "text_secondary": "#A7ADBC",
-    "text_muted": "#6D7386",
-    "primary": "#5C7CFA",
-    "primary_hover": "#748FFC",
-    "primary_pressed": "#4C6EF5",
-    "primary_light": "#232A45",
-    "primary_border": "#3B4570",
-    "danger": "#FF6B6B",
-    "danger_hover": "#FA5252",
-    "danger_light": "#3A2020",
-    "success": "#51CF66",
-    "sidebar_bg": "#12141C",
-    "sidebar_bg_hover": "#1D2030",
-    "sidebar_bg_selected": "#4C6EF5",
-    "sidebar_text": "#C7CBDA",
-    "sidebar_text_muted": "#6D7386",
+    "bg": "#14161D",
+    "surface": "#1C1F29",
+    "surface_alt": "#232735",
+    "border": "#2E3342",
+    "border_strong": "#3B4155",
+    "text": "#E6E8EE",
+    "text_secondary": "#A4AABA",
+    "text_muted": "#7C8296",
+    "primary": "#4D6AEA",
+    "primary_hover": "#5873F0",
+    "primary_pressed": "#4260DB",
+    "primary_light": "#253056",
+    "primary_border": "#3D4A85",
+    "primary_text": "#A5B8FF",
+    "on_primary": "#FFFFFF",
+    "danger": "#FF7070",
+    "danger_hover": "#FF8A8A",
+    "danger_light": "#3B2229",
+    "success": "#69DB7C",
+    "sidebar_bg": "#101219",
+    "sidebar_bg_hover": "#1B1E2B",
+    "sidebar_bg_selected": "#4D6AEA",
+    "sidebar_text": "#C9CDDB",
+    "sidebar_text_muted": "#7C8296",
     "sidebar_text_selected": "#FFFFFF",
 }
 
@@ -145,6 +156,24 @@ def build_stylesheet(palette: dict) -> str:
         padding: 2px 0 4px 0;
     }}
 
+    QLabel[role="avatar"] {{
+        background: {c['primary_light']};
+        color: {c['primary_text']};
+        border-radius: 24px;
+        font-size: 16pt;
+        font-weight: 700;
+    }}
+
+    QLabel[role="sidebar-title"] {{
+        color: {c['sidebar_text_selected']};
+        font-size: 15pt;
+        font-weight: 700;
+    }}
+    QLabel[role="sidebar-subtitle"] {{
+        color: {c['sidebar_text_muted']};
+        font-size: 9.5pt;
+    }}
+
     /* -------------------------------------------------------------- */
     /* Botones                                                          */
     /* -------------------------------------------------------------- */
@@ -172,7 +201,7 @@ def build_stylesheet(palette: dict) -> str:
     QPushButton[variant="primary"] {{
         background: {c['primary']};
         border: 1px solid {c['primary']};
-        color: white;
+        color: {c['on_primary']};
         font-weight: 600;
     }}
     QPushButton[variant="primary"]:hover {{
@@ -238,7 +267,7 @@ def build_stylesheet(palette: dict) -> str:
     QPushButton[variant="chip"]:checked {{
         background: {c['primary_light']};
         border: 1px solid {c['primary_border']};
-        color: {c['primary_pressed']};
+        color: {c['primary_text']};
         font-weight: 600;
     }}
 
@@ -250,7 +279,7 @@ def build_stylesheet(palette: dict) -> str:
         border: 1px solid {c['border_strong']};
         border-radius: {RADIUS['sm']}px;
         padding: 6px 9px;
-        selection-background-color: {c['primary_light']};
+        selection-background-color: {c['primary_border']};
         selection-color: {c['text']};
     }}
     QLineEdit:focus, QPlainTextEdit:focus, QTextEdit:focus, QComboBox:focus {{
@@ -270,6 +299,13 @@ def build_stylesheet(palette: dict) -> str:
     }}
     QLineEdit[variant="heading"]:focus {{
         border-bottom: 2px solid {c['primary']};
+    }}
+    /* Sin borde ni radio a propósito: al estilizarlos Qt sustituye los
+       botones arriba/abajo nativos por unos sin flechas. */
+    QSpinBox {{
+        background: {c['surface']};
+        selection-background-color: {c['primary_border']};
+        selection-color: {c['text']};
     }}
     QComboBox {{
         min-height: 20px;
@@ -312,7 +348,7 @@ def build_stylesheet(palette: dict) -> str:
     }}
     QListWidget::item:selected {{
         background: {c['primary_light']};
-        color: {c['primary_pressed']};
+        color: {c['primary_text']};
         font-weight: 600;
     }}
 
@@ -430,7 +466,7 @@ def build_stylesheet(palette: dict) -> str:
     }}
     QToolBar QToolButton:checked {{
         background: {c['primary_light']};
-        color: {c['primary_pressed']};
+        color: {c['primary_text']};
     }}
     QToolBar::separator {{
         background: {c['border']};
@@ -462,7 +498,7 @@ def build_stylesheet(palette: dict) -> str:
     }}
     QMenu::item:selected {{
         background: {c['primary_light']};
-        color: {c['primary_pressed']};
+        color: {c['primary_text']};
     }}
     QMenu::separator {{
         height: 1px;
@@ -526,6 +562,13 @@ def build_stylesheet(palette: dict) -> str:
 
     QMessageBox QPushButton, QInputDialog QPushButton {{
         min-width: 76px;
+    }}
+
+    QToolTip {{
+        background: {c['surface']};
+        color: {c['text']};
+        border: 1px solid {c['border_strong']};
+        padding: 4px 8px;
     }}
     """
 

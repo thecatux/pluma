@@ -128,9 +128,7 @@ class CharactersPanel(QWidget):
         self.avatar_label = QLabel("?")
         self.avatar_label.setFixedSize(48, 48)
         self.avatar_label.setAlignment(Qt.AlignCenter)
-        self.avatar_label.setStyleSheet(
-            "background: #EDF1FF; color: #4059DB; border-radius: 24px; font-size: 16pt; font-weight: 700;"
-        )
+        self.avatar_label.setProperty("role", "avatar")
         header_row.addWidget(self.avatar_label)
 
         self.name_edit = QLineEdit()

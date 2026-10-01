@@ -9,15 +9,14 @@ clase solo hace de anfitrión y gestiona el cambio de proyecto.
 
 from PySide6.QtWidgets import (QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
                                 QListWidget, QListWidgetItem, QStackedWidget,
-                                QStatusBar, QLabel, QFrame)
+                                QStatusBar, QLabel, QFrame, QPushButton, QToolBar)
 from PySide6.QtCore import Qt, QSize
-from PySide6.QtGui import QFont, QAction, QActionGroup, QKeySequence
+from PySide6.QtGui import QFont, QAction, QKeySequence
 
 import icons
 import theme
 from db import Database
 from project_dialog import ProjectDialog
-from theme import MODE_LABELS
 from panels.info_panel import InfoPanel
 from panels.chapters_panel import ChaptersPanel
 from panels.characters_panel import CharactersPanel
@@ -36,6 +35,18 @@ SECTIONS = [
     ("settings", "settings", "Ajustes"),
 ]
 
+# Modos de la barra lateral, en el orden en que los recorre el botón.
+SIDEBAR_MODES = ("full", "icons", "hidden")
+SIDEBAR_WIDTHS = {"full": 212, "icons": 66}
+# En modo solo iconos el logo se centra en el ancho reducido.
+SIDEBAR_HEADER_MARGINS = {"full": (20, 22, 20, 18), "icons": (23, 22, 23, 18)}
+# Texto del botón: qué ocurre al pulsarlo desde cada modo.
+SIDEBAR_TOGGLE_TIPS = {
+    "full": "Mostrar solo iconos (Ctrl+Shift+B)",
+    "icons": "Ocultar la barra lateral (Ctrl+Shift+B)",
+    "hidden": "Mostrar la barra lateral (Ctrl+Shift+B)",
+}
+
 
 class MainWindow(QMainWindow):
     def __init__(self, db: Database, theme_controller=None):
@@ -47,8 +58,9 @@ class MainWindow(QMainWindow):
         self.setMinimumSize(920, 600)
 
         self._build_sidebar_and_stack()
-        self._build_menu()
+        self._build_global_controls()
         self._build_status_bar()
+        self._set_sidebar_mode("full")
 
         # El cambio de sección hace "flush" del autoguardado pendiente
         # del panel que se abandona, para no perder cambios recientes si
@@ -62,16 +74,15 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
-        sidebar_container = QWidget()
-        sidebar_container.setFixedWidth(212)
-        sidebar_layout = QVBoxLayout(sidebar_container)
+        self.sidebar_container = QWidget()
+        sidebar_layout = QVBoxLayout(self.sidebar_container)
         sidebar_layout.setContentsMargins(0, 0, 0, 0)
         sidebar_layout.setSpacing(0)
 
         header = QFrame()
         header.setProperty("role", "sidebar-header")
+        self.sidebar_header = header
         header_layout = QVBoxLayout(header)
-        header_layout.setContentsMargins(20, 22, 20, 18)
         header_layout.setSpacing(2)
 
         title_row = QHBoxLayout()
@@ -80,14 +91,14 @@ class MainWindow(QMainWindow):
         self.app_icon_label = QLabel()
         self.app_icon_label.setFixedSize(20, 20)
         title_row.addWidget(self.app_icon_label)
-        app_title = QLabel("Pluma")
-        app_title.setStyleSheet("color: #FFFFFF; font-size: 15pt; font-weight: 700;")
-        title_row.addWidget(app_title)
+        self.app_title = QLabel("Pluma")
+        self.app_title.setProperty("role", "sidebar-title")
+        title_row.addWidget(self.app_title)
         title_row.addStretch(1)
         header_layout.addLayout(title_row)
 
         self.project_label = QLabel("Sin proyecto")
-        self.project_label.setStyleSheet("color: #7C8195; font-size: 9.5pt;")
+        self.project_label.setProperty("role", "sidebar-subtitle")
         self.project_label.setWordWrap(True)
         header_layout.addWidget(self.project_label)
 
@@ -96,10 +107,32 @@ class MainWindow(QMainWindow):
         self.sidebar = QListWidget()
         self.sidebar.setObjectName("Sidebar")
         self.sidebar.setIconSize(QSize(18, 18))
+        self.sidebar.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         font = QFont()
         font.setPointSize(11)
         self.sidebar.setFont(font)
         sidebar_layout.addWidget(self.sidebar, 1)
+
+        footer_divider = QFrame()
+        footer_divider.setProperty("role", "divider")
+        footer_divider.setFixedHeight(1)
+        sidebar_layout.addWidget(footer_divider)
+
+        footer = QFrame()
+        footer.setProperty("role", "sidebar-header")
+        self.sidebar_footer_layout = QVBoxLayout(footer)
+        self.sidebar_footer_layout.setContentsMargins(10, 10, 10, 10)
+        self.sidebar_footer_layout.setSpacing(0)
+
+        self.switch_project_button = QPushButton("Cambiar proyecto")
+        self.switch_project_button.setProperty("variant", "primary")
+        self.switch_project_button.setIconSize(QSize(16, 16))
+        self.switch_project_button.setMinimumHeight(36)
+        self.switch_project_button.setToolTip("Cambiar proyecto")
+        self.switch_project_button.setAccessibleName("Cambiar proyecto")
+        self.switch_project_button.clicked.connect(self.prompt_switch_project)
+        self.sidebar_footer_layout.addWidget(self.switch_project_button)
+        sidebar_layout.addWidget(footer)
 
         self.stack = QStackedWidget()
         self.panels = {}
@@ -112,8 +145,8 @@ class MainWindow(QMainWindow):
         self.panels["notes"] = NotesPanel(self.db)
         self.panels["settings"] = SettingsPanel(self.db, self.theme_controller)
 
-        for key, icon_name, label in SECTIONS:
-            item = QListWidgetItem(f"  {label}")
+        for key, icon_name, _label in SECTIONS:
+            item = QListWidgetItem()
             item.setData(Qt.UserRole, icon_name)
             self.sidebar.addItem(item)
             self.stack.addWidget(self.panels[key])
@@ -125,13 +158,14 @@ class MainWindow(QMainWindow):
         self._refresh_sidebar_icons()
         theme.signals.changed.connect(self._refresh_sidebar_icons)
 
-        layout.addWidget(sidebar_container)
+        layout.addWidget(self.sidebar_container)
         layout.addWidget(self.stack, 1)
         self.setCentralWidget(central)
 
     def _refresh_sidebar_icons(self, *_args):
         c = theme.colors()
-        self.app_icon_label.setPixmap(icons.pixmap("pen", "#FFFFFF", size=20))
+        self.app_icon_label.setPixmap(icons.pixmap("pen", c["sidebar_text_selected"], size=20))
+        self.switch_project_button.setIcon(icons.icon("library", c["on_primary"], size=16))
         for row in range(self.sidebar.count()):
             item = self.sidebar.item(row)
             icon_name = item.data(Qt.UserRole)
@@ -139,40 +173,74 @@ class MainWindow(QMainWindow):
                 icon_name, c["sidebar_text"], c["sidebar_text_selected"], size=18
             ))
 
-    def _build_menu(self):
-        menubar = self.menuBar()
-        project_menu = menubar.addMenu("&Proyecto")
+    def _build_sidebar_toggle(self, toolbar):
+        self.sidebar_toggle_button = QPushButton()
+        self.sidebar_toggle_button.setProperty("variant", "flat")
+        self.sidebar_toggle_button.setIconSize(QSize(16, 16))
+        self.sidebar_toggle_button.setFixedSize(34, 34)
+        self.sidebar_toggle_button.setAccessibleName("Mostrar u ocultar la barra lateral")
+        self.sidebar_toggle_button.clicked.connect(self._cycle_sidebar_mode)
+        toolbar.addWidget(self.sidebar_toggle_button)
+        self._refresh_sidebar_toggle_icon()
+        theme.signals.changed.connect(self._refresh_sidebar_toggle_icon)
+
+    def _refresh_sidebar_toggle_icon(self, *_args):
+        self.sidebar_toggle_button.setIcon(
+            icons.icon("sidebar", theme.colors()["text_secondary"], size=16)
+        )
+
+    def _cycle_sidebar_mode(self):
+        next_index = (SIDEBAR_MODES.index(self._sidebar_mode) + 1) % len(SIDEBAR_MODES)
+        self._set_sidebar_mode(SIDEBAR_MODES[next_index])
+
+    def _set_sidebar_mode(self, mode: str):
+        self._sidebar_mode = mode
+        self.sidebar_toggle_button.setToolTip(SIDEBAR_TOGGLE_TIPS[mode])
+        self.sidebar_container.setVisible(mode != "hidden")
+        if mode == "hidden":
+            return
+        compact = mode == "icons"
+        self.sidebar_container.setFixedWidth(SIDEBAR_WIDTHS[mode])
+        self.sidebar_header.layout().setContentsMargins(*SIDEBAR_HEADER_MARGINS[mode])
+        self.app_title.setVisible(not compact)
+        self.project_label.setVisible(not compact)
+        self.sidebar_footer_layout.setContentsMargins(6 if compact else 10, 10,
+                                  6 if compact else 10, 10)
+        self.switch_project_button.setText("" if compact else "Cambiar proyecto")
+        self._set_sidebar_labels(compact)
+
+    def _set_sidebar_labels(self, compact: bool):
+        """En modo solo iconos el texto pasa a ser un tooltip."""
+        for row, (_key, _icon_name, label) in enumerate(SECTIONS):
+            item = self.sidebar.item(row)
+            item.setText("" if compact else f"  {label}")
+            item.setToolTip(label if compact else "")
+
+    def _build_global_controls(self):
+        toolbar = QToolBar("Controles de ventana", self)
+        toolbar.setObjectName("GlobalControls")
+        toolbar.setMovable(False)
+        toolbar.setFloatable(False)
+        self.addToolBar(Qt.ToolBarArea.TopToolBarArea, toolbar)
+        self._build_sidebar_toggle(toolbar)
 
         switch_action = QAction("Cambiar de proyecto...", self)
         switch_action.setShortcut(QKeySequence("Ctrl+Shift+P"))
+        switch_action.setShortcutContext(Qt.ShortcutContext.ApplicationShortcut)
         switch_action.triggered.connect(self.prompt_switch_project)
-        project_menu.addAction(switch_action)
-
-        project_menu.addSeparator()
+        self.addAction(switch_action)
 
         quit_action = QAction("Salir", self)
         quit_action.setShortcut(QKeySequence("Ctrl+Q"))
+        quit_action.setShortcutContext(Qt.ShortcutContext.ApplicationShortcut)
         quit_action.triggered.connect(self.close)
-        project_menu.addAction(quit_action)
+        self.addAction(quit_action)
 
-        self._build_view_menu(menubar)
-
-    def _build_view_menu(self, menubar):
-        if self.theme_controller is None:
-            return
-        view_menu = menubar.addMenu("&Ver")
-        theme_menu = view_menu.addMenu("Tema")
-
-        group = QActionGroup(self)
-        group.setExclusive(True)
-        self._theme_mode_actions = {}
-        for mode in ("auto", "light", "dark"):
-            action = QAction(MODE_LABELS[mode], self, checkable=True)
-            action.setChecked(self.theme_controller.mode == mode)
-            action.triggered.connect(lambda checked, m=mode: self.theme_controller.set_mode(m))
-            group.addAction(action)
-            theme_menu.addAction(action)
-            self._theme_mode_actions[mode] = action
+        toggle_action = QAction("Mostrar u ocultar la barra lateral", self)
+        toggle_action.setShortcut(QKeySequence("Ctrl+Shift+B"))
+        toggle_action.setShortcutContext(Qt.ShortcutContext.ApplicationShortcut)
+        toggle_action.triggered.connect(self._cycle_sidebar_mode)
+        self.addAction(toggle_action)
 
     def _build_status_bar(self):
         status = QStatusBar()

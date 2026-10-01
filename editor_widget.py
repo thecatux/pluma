@@ -349,7 +349,7 @@ class RichTextEditor(QWidget):
             name = self._ALIGN_ICON_NAMES[opt.label]
             align_icon = QIcon()
             align_icon.addPixmap(icons.pixmap(name, c["text"], size=16), QIcon.Normal, QIcon.Off)
-            align_icon.addPixmap(icons.pixmap(name, c["primary_pressed"], size=16), QIcon.Normal, QIcon.On)
+            align_icon.addPixmap(icons.pixmap(name, c["primary_text"], size=16), QIcon.Normal, QIcon.On)
             action.setIcon(align_icon)
 
     def _glyph_button(self, action: QAction, key: str):
