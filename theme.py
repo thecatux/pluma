@@ -6,6 +6,11 @@ definen sus propios colores sueltos: usan estas constantes/roles o
 consultan `theme.colors()` para lo poco que necesita seguir el
 esquema de color activo.
 
+Estilo "cristal": fondos en degradado suave con paneles translúcidos
+(rgba) y bordes finos. Qt Style Sheets no puede desenfocar lo que hay
+detrás de un widget, así que el efecto se consigue con transparencias y
+degradados, no con un blur real.
+
 Pluma admite modo claro y modo oscuro. Por defecto sigue el tema del
 sistema operativo ("automático"); el usuario puede forzar uno de los
 dos desde el menú "Ver" de la ventana principal. La preferencia se
@@ -13,78 +18,129 @@ guarda con QSettings y se restaura al reabrir la aplicación.
 """
 
 from PySide6.QtCore import QObject, Signal, QSettings
-from PySide6.QtGui import QGuiApplication, QPalette
+from PySide6.QtGui import QColor, QGuiApplication, QPalette
 
 FONT_FAMILY = '"Segoe UI", "SF Pro Text", "Inter", "Helvetica Neue", Arial, sans-serif'
 FONT_FAMILY_SERIF = '"Georgia", "Iowan Old Style", "Palatino Linotype", serif'
 
 RADIUS = {"sm": 6, "md": 8, "lg": 12, "xl": 16}
 
-# Paleta clara: fondos de papel cálido en lugar de gris frío, con un
-# índigo contenido como único color de acento. Los textos secundarios
-# mantienen al menos 4.5:1 de contraste sobre las superficies.
+# Paleta clara "cristal": fondo neutro de papel, superficies blancas
+# translúcidas y un acento verde petróleo sobrio, de inspiración editorial.
+#
+# IMPORTANTE: las claves "clásicas" (bg, surface, border, primary...)
+# siguen siendo colores hexadecimales planos, porque otros módulos
+# (p. ej. el lienzo de la línea temporal) las pasan a QColor. Las claves
+# de cristal (bg_gradient, glass*, sidebar_glass...) contienen rgba() y
+# degradados de QSS: solo se usan dentro de `build_stylesheet`.
 _LIGHT = {
-    "bg": "#F5F3EF",
+    "bg": "#F0F3F0",
     "surface": "#FFFFFF",
-    "surface_alt": "#FAF8F5",
-    "border": "#E8E4DD",
-    "border_strong": "#D8D3CA",
-    "text": "#25231F",
-    "text_secondary": "#6A655D",
-    "text_muted": "#8E887E",
-    "primary": "#4263EB",
-    "primary_hover": "#3B5BDB",
-    "primary_pressed": "#364FC7",
-    "primary_light": "#ECEFFD",
-    "primary_border": "#C7D0F8",
+    "surface_alt": "#F6F8F6",
+    "border": "#E0E6E1",
+    "border_strong": "#C8D2CB",
+    "text": "#202722",
+    "text_secondary": "#58645C",
+    "text_muted": "#7C887F",
+    "primary": "#36776A",
+    "primary_hover": "#2E695D",
+    "primary_pressed": "#275A50",
+    "primary_light": "#E3EFEB",
+    "primary_border": "#BFD8D0",
     # Texto/iconos sobre `primary_light` (selecciones, chips activos) y
     # sobre `primary` (botones principales). Separados de
     # `primary_pressed` porque en el tema oscuro el texto sobre un fondo
     # tintado necesita ser claro y el fondo pulsado de un botón, no.
-    "primary_text": "#364FC7",
+    "primary_text": "#285D52",
     "on_primary": "#FFFFFF",
     "danger": "#C92F2F",
     "danger_hover": "#B02525",
     "danger_light": "#FDEDED",
     "success": "#2B8A3E",
-    "sidebar_bg": "#1E2130",
-    "sidebar_bg_hover": "#2A2E42",
-    "sidebar_bg_selected": "#4263EB",
-    "sidebar_text": "#C9CDDB",
-    "sidebar_text_muted": "#8A90A6",
-    "sidebar_text_selected": "#FFFFFF",
+    # Barra lateral (valores planos de reserva; el aspecto real lo da
+    # `sidebar_glass`). En claro ya NO es oscura: es un cristal esmerilado.
+    "sidebar_bg": "#F1F4F1",
+    "sidebar_bg_hover": "#E8EDE9",
+    "sidebar_bg_selected": "#FFFFFF",
+    "sidebar_text": "#4D5A52",
+    "sidebar_text_muted": "#758178",
+    "sidebar_text_selected": "#285D52",
+    "sidebar_title": "#202722",
+    # --- Efecto cristal (solo QSS) ---
+    "bg_gradient": "qlineargradient(x1:0, y1:0, x2:1, y2:1, "
+                   "stop:0 #E9F0EB, stop:0.55 #F1F4F0, stop:1 #F5F3EE)",
+    "glass": "rgba(255, 255, 255, 62%)",
+    "glass_hover": "rgba(255, 255, 255, 88%)",
+    "glass_subtle": "rgba(255, 255, 255, 42%)",
+    "glass_border": "rgba(92, 117, 101, 22%)",
+    "bar_glass": "rgba(255, 255, 255, 68%)",
+    "sidebar_glass": "qlineargradient(x1:0, y1:0, x2:0, y2:1, "
+                     "stop:0 rgba(255, 255, 255, 86%), stop:1 rgba(255, 255, 255, 58%))",
+    "sidebar_edge": "rgba(77, 105, 87, 30%)",
+    "sidebar_item_hover": "rgba(255, 255, 255, 60%)",
+    "sidebar_item_selected": "rgba(255, 255, 255, 92%)",
+    "sidebar_item_selected_border": "rgba(54, 119, 106, 30%)",
+    # Tarjetas y botones de cristal: degradado vertical + luz en el borde
+    # superior (`rim_top`). Los reflejos curvos los pinta `glass.py`.
+    "card_glass": "qlineargradient(x1:0, y1:0, x2:0, y2:1, "
+                  "stop:0 rgba(255, 255, 255, 74%), stop:1 rgba(255, 255, 255, 44%))",
+    "button_glass": "qlineargradient(x1:0, y1:0, x2:0, y2:1, "
+                    "stop:0 rgba(255, 255, 255, 96%), stop:1 rgba(255, 255, 255, 66%))",
+    "button_glass_hover": "qlineargradient(x1:0, y1:0, x2:0, y2:1, "
+                          "stop:0 rgba(255, 255, 255, 100%), stop:1 rgba(255, 255, 255, 84%))",
+    "rim_top": "rgba(255, 255, 255, 95%)",
 }
 
-# Paleta oscura: grises azulados suaves (nada de negro puro) y un
-# acento algo más profundo que el claro para que el texto blanco de los
-# botones principales siga siendo legible. La barra lateral sigue
-# siendo la identidad visual de Pluma, un poco más oscura que el fondo.
+# Paleta oscura: grafito suave, superficies de cristal ahumado y el
+# mismo acento verde petróleo aclarado para conservar el contraste.
 _DARK = {
-    "bg": "#14161D",
-    "surface": "#1C1F29",
-    "surface_alt": "#232735",
-    "border": "#2E3342",
-    "border_strong": "#3B4155",
-    "text": "#E6E8EE",
-    "text_secondary": "#A4AABA",
-    "text_muted": "#7C8296",
-    "primary": "#4D6AEA",
-    "primary_hover": "#5873F0",
-    "primary_pressed": "#4260DB",
-    "primary_light": "#253056",
-    "primary_border": "#3D4A85",
-    "primary_text": "#A5B8FF",
+    "bg": "#171B19",
+    "surface": "#202622",
+    "surface_alt": "#282F2B",
+    "border": "#343D37",
+    "border_strong": "#465249",
+    "text": "#E8ECE9",
+    "text_secondary": "#ADB8B0",
+    "text_muted": "#818E85",
+    "primary": "#58A08E",
+    "primary_hover": "#69AF9D",
+    "primary_pressed": "#498F7D",
+    "primary_light": "#263B35",
+    "primary_border": "#3B6559",
+    "primary_text": "#B1DBCE",
     "on_primary": "#FFFFFF",
     "danger": "#FF7070",
     "danger_hover": "#FF8A8A",
     "danger_light": "#3B2229",
     "success": "#69DB7C",
-    "sidebar_bg": "#101219",
-    "sidebar_bg_hover": "#1B1E2B",
-    "sidebar_bg_selected": "#4D6AEA",
-    "sidebar_text": "#C9CDDB",
-    "sidebar_text_muted": "#7C8296",
-    "sidebar_text_selected": "#FFFFFF",
+    "sidebar_bg": "#191F1B",
+    "sidebar_bg_hover": "#232A25",
+    "sidebar_bg_selected": "#263B35",
+    "sidebar_text": "#BAC5BD",
+    "sidebar_text_muted": "#818E85",
+    "sidebar_text_selected": "#B1DBCE",
+    "sidebar_title": "#EEF2EF",
+    # --- Efecto cristal (solo QSS) ---
+    "bg_gradient": "qlineargradient(x1:0, y1:0, x2:1, y2:1, "
+                   "stop:0 #151B17, stop:1 #1A201D)",
+    "glass": "rgba(255, 255, 255, 5%)",
+    "glass_hover": "rgba(255, 255, 255, 9%)",
+    "glass_subtle": "rgba(255, 255, 255, 3%)",
+    "glass_border": "rgba(205, 224, 211, 11%)",
+    "bar_glass": "rgba(255, 255, 255, 4%)",
+    "sidebar_glass": "qlineargradient(x1:0, y1:0, x2:0, y2:1, "
+                     "stop:0 rgba(224, 239, 228, 8%), stop:1 rgba(224, 239, 228, 3%))",
+    "sidebar_edge": "rgba(205, 224, 211, 12%)",
+    "sidebar_item_hover": "rgba(255, 255, 255, 7%)",
+    "sidebar_item_selected": "rgba(82, 155, 131, 20%)",
+    "sidebar_item_selected_border": "rgba(113, 190, 166, 32%)",
+    "card_glass": "qlineargradient(x1:0, y1:0, x2:0, y2:1, "
+                  "stop:0 rgba(255, 255, 255, 8%), stop:1 rgba(255, 255, 255, 3%))",
+    "button_glass": "qlineargradient(x1:0, y1:0, x2:0, y2:1, "
+                    "stop:0 rgba(255, 255, 255, 13%), stop:1 rgba(255, 255, 255, 6%))",
+    "button_glass_hover": "qlineargradient(x1:0, y1:0, x2:0, y2:1, "
+                          "stop:0 rgba(255, 255, 255, 20%), stop:1 rgba(255, 255, 255, 10%))",
+    "rim_top": "rgba(255, 255, 255, 26%)",
 }
 
 PALETTES = {"light": _LIGHT, "dark": _DARK}
@@ -119,6 +175,57 @@ def current_scheme() -> str:
     return _current_scheme
 
 
+def _blend_colors(foreground: QColor, background: QColor, ratio: float) -> QColor:
+    return QColor(
+        round(background.red() * (1 - ratio) + foreground.red() * ratio),
+        round(background.green() * (1 - ratio) + foreground.green() * ratio),
+        round(background.blue() * (1 - ratio) + foreground.blue() * ratio),
+    )
+
+
+def _contrast_ratio(first: QColor, second: QColor) -> float:
+    def luminance(color: QColor) -> float:
+        channels = [color.redF(), color.greenF(), color.blueF()]
+        linear = [value / 12.92 if value <= 0.04045 else ((value + 0.055) / 1.055) ** 2.4
+                  for value in channels]
+        return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+
+    values = sorted((luminance(first), luminance(second)))
+    return (values[1] + 0.05) / (values[0] + 0.05)
+
+
+def _palette_with_accent(palette: dict, accent_value: str, dark: bool) -> dict:
+    accent = QColor(accent_value)
+    result = dict(palette)
+    surface = QColor(palette["surface"])
+    text = QColor(palette["text"])
+    light_text = QColor(palette["on_primary"])
+    hover = accent.darker(108)
+    pressed = accent.darker(118)
+    tint_ratio = 0.22 if dark else 0.13
+    border_ratio = 0.46 if dark else 0.34
+    tint = _blend_colors(accent, surface, tint_ratio)
+    border = _blend_colors(accent, surface, border_ratio)
+    accent_text = accent.lighter(155) if dark else accent.darker(170)
+    tint_text = max((text, accent_text), key=lambda color: _contrast_ratio(color, tint))
+    button_text = max((light_text, text), key=lambda color: _contrast_ratio(color, accent))
+
+    result.update({
+        "primary": accent.name(),
+        "primary_hover": hover.name(),
+        "primary_pressed": pressed.name(),
+        "primary_light": tint.name(),
+        "primary_border": border.name(),
+        "primary_text": tint_text.name(),
+        "on_primary": button_text.name(),
+        "sidebar_item_selected": f"rgba({accent.red()}, {accent.green()}, {accent.blue()}, "
+                                  f"{22 if dark else 14}%)",
+        "sidebar_item_selected_border": f"rgba({accent.red()}, {accent.green()}, "
+                                         f"{accent.blue()}, 34%)",
+    })
+    return result
+
+
 def build_stylesheet(palette: dict) -> str:
     c = palette
     return f"""
@@ -128,7 +235,7 @@ def build_stylesheet(palette: dict) -> str:
     }}
 
     QMainWindow, QDialog {{
-        background: {c['bg']};
+        background: {c['bg_gradient']};
     }}
 
     QWidget {{
@@ -165,7 +272,7 @@ def build_stylesheet(palette: dict) -> str:
     }}
 
     QLabel[role="sidebar-title"] {{
-        color: {c['sidebar_text_selected']};
+        color: {c['sidebar_title']};
         font-size: 15pt;
         font-weight: 700;
     }}
@@ -178,15 +285,16 @@ def build_stylesheet(palette: dict) -> str:
     /* Botones                                                          */
     /* -------------------------------------------------------------- */
     QPushButton {{
-        background: {c['surface']};
+        background: {c['button_glass']};
         border: 1px solid {c['border_strong']};
+        border-top-color: {c['rim_top']};
         border-radius: {RADIUS['md']}px;
         padding: 7px 14px;
         color: {c['text']};
         font-weight: 500;
     }}
     QPushButton:hover {{
-        background: {c['surface_alt']};
+        background: {c['button_glass_hover']};
         border-color: {c['text_muted']};
     }}
     QPushButton:pressed {{
@@ -201,6 +309,7 @@ def build_stylesheet(palette: dict) -> str:
     QPushButton[variant="primary"] {{
         background: {c['primary']};
         border: 1px solid {c['primary']};
+        border-top-color: rgba(255, 255, 255, 55%);
         color: {c['on_primary']};
         font-weight: 600;
     }}
@@ -235,7 +344,7 @@ def build_stylesheet(palette: dict) -> str:
     }}
     QPushButton[variant="flat"]:hover {{
         color: {c['text']};
-        background: {c['surface_alt']};
+        background: {c['glass_hover']};
     }}
 
     QPushButton[variant="icon"] {{
@@ -332,8 +441,8 @@ def build_stylesheet(palette: dict) -> str:
     /* Listas                                                            */
     /* -------------------------------------------------------------- */
     QListWidget {{
-        background: {c['surface']};
-        border: 1px solid {c['border']};
+        background: {c['glass']};
+        border: 1px solid {c['glass_border']};
         border-radius: {RADIUS['md']}px;
         padding: 4px;
     }}
@@ -344,7 +453,7 @@ def build_stylesheet(palette: dict) -> str:
         color: {c['text']};
     }}
     QListWidget::item:hover {{
-        background: {c['surface_alt']};
+        background: {c['glass_hover']};
     }}
     QListWidget::item:selected {{
         background: {c['primary_light']};
@@ -366,38 +475,49 @@ def build_stylesheet(palette: dict) -> str:
         background: transparent;
     }}
 
+    /* Barra lateral: el cristal (sombra, relleno, reflejos y borde) lo
+       pinta `glass.GlassPanel` y la pastilla del elemento activo,
+       `glass.SidebarItemDelegate`; aquí todo es transparente. */
+    QWidget#SidebarContainer {{
+        background: transparent;
+        border: none;
+    }}
     QListWidget#Sidebar {{
-        background: {c['sidebar_bg']};
+        background: transparent;
         border: none;
         border-radius: 0;
         padding: 6px;
     }}
     QListWidget#Sidebar::item {{
         color: {c['sidebar_text']};
-        padding: 11px 14px;
+        padding: 10px 13px;
         margin: 2px 4px;
+        border: 1px solid transparent;
         border-radius: {RADIUS['md']}px;
+        background: transparent;
         font-weight: 500;
     }}
     QListWidget#Sidebar::item:hover {{
-        background: {c['sidebar_bg_hover']};
+        background: transparent;
     }}
     QListWidget#Sidebar::item:selected {{
-        background: {c['sidebar_bg_selected']};
+        background: transparent;
         color: {c['sidebar_text_selected']};
+        font-weight: 600;
     }}
 
     /* -------------------------------------------------------------- */
     /* Contenedores                                                      */
     /* -------------------------------------------------------------- */
     QFrame[role="card"] {{
-        background: {c['surface']};
-        border: 1px solid {c['border']};
+        background: {c['card_glass']};
+        border: 1px solid {c['glass_border']};
+        border-top-color: {c['rim_top']};
         border-radius: {RADIUS['lg']}px;
     }}
     QFrame[role="field-row"] {{
-        background: {c['surface_alt']};
-        border: 1px solid {c['border']};
+        background: {c['glass_subtle']};
+        border: 1px solid {c['glass_border']};
         border-radius: {RADIUS['md']}px;
     }}
     QFrame[role="divider"] {{
@@ -406,12 +526,12 @@ def build_stylesheet(palette: dict) -> str:
         border: none;
     }}
     QFrame[role="sidebar-header"] {{
-        background: {c['sidebar_bg']};
+        background: transparent;
         border: none;
     }}
     QFrame[role="toolbar-strip"] {{
-        background: {c['surface_alt']};
-        border: 1px solid {c['border']};
+        background: {c['glass_subtle']};
+        border: 1px solid {c['glass_border']};
         border-radius: {RADIUS['md']}px;
     }}
 
@@ -424,8 +544,8 @@ def build_stylesheet(palette: dict) -> str:
     }}
 
     QGroupBox {{
-        background: {c['surface']};
-        border: 1px solid {c['border']};
+        background: {c['glass']};
+        border: 1px solid {c['glass_border']};
         border-radius: {RADIUS['md']}px;
         margin-top: 10px;
         padding-top: 14px;
@@ -442,7 +562,7 @@ def build_stylesheet(palette: dict) -> str:
     }}
 
     QSplitter::handle {{
-        background: {c['bg']};
+        background: {c['glass_border']};
         width: 1px;
     }}
 
@@ -450,9 +570,9 @@ def build_stylesheet(palette: dict) -> str:
     /* Barras                                                            */
     /* -------------------------------------------------------------- */
     QToolBar {{
-        background: {c['surface']};
+        background: {c['bar_glass']};
         border: none;
-        border-bottom: 1px solid {c['border']};
+        border-bottom: 1px solid {c['glass_border']};
         padding: 5px 6px;
         spacing: 2px;
     }}
@@ -507,8 +627,8 @@ def build_stylesheet(palette: dict) -> str:
     }}
 
     QStatusBar {{
-        background: {c['surface']};
-        border-top: 1px solid {c['border']};
+        background: {c['bar_glass']};
+        border-top: 1px solid {c['glass_border']};
         color: {c['text_secondary']};
     }}
 
@@ -589,6 +709,8 @@ class ThemeController(QObject):
         self._settings = QSettings()
         mode = self._settings.value("theme/mode", "auto")
         self._mode = mode if mode in ("auto", "light", "dark") else "auto"
+        saved_accent = QColor(self._settings.value("theme/accent_color", ""))
+        self._accent_color = saved_accent.name() if saved_accent.isValid() else ""
         self._scheme = "light"
         self._hook_system_signal()
 
@@ -600,11 +722,33 @@ class ThemeController(QObject):
     def scheme(self) -> str:
         return self._scheme
 
+    @property
+    def accent_color(self) -> str:
+        return self._accent_color or PALETTES[self._scheme]["primary"]
+
+    @property
+    def has_custom_accent(self) -> bool:
+        return bool(self._accent_color)
+
     def set_mode(self, mode: str):
         if mode not in ("auto", "light", "dark") or mode == self._mode:
             return
         self._mode = mode
         self._settings.setValue("theme/mode", mode)
+        self.apply()
+
+    def set_accent_color(self, color: str | None):
+        if color is None:
+            if not self._accent_color:
+                return
+            self._accent_color = ""
+            self._settings.remove("theme/accent_color")
+        else:
+            selected = QColor(color)
+            if not selected.isValid() or selected.name() == self._accent_color:
+                return
+            self._accent_color = selected.name()
+            self._settings.setValue("theme/accent_color", self._accent_color)
         self.apply()
 
     def _hook_system_signal(self):
@@ -639,6 +783,9 @@ class ThemeController(QObject):
         global _current_colors, _current_scheme
         self._scheme = self._mode if self._mode in ("light", "dark") else self._detect_system_scheme()
         palette = PALETTES[self._scheme]
+        if self._accent_color:
+            palette = _palette_with_accent(palette, self._accent_color,
+                                           dark=self._scheme == "dark")
         _current_colors = palette
         _current_scheme = self._scheme
 
@@ -653,6 +800,8 @@ class ThemeController(QObject):
 
 
 def apply_theme(app) -> ThemeController:
+    import glass  # import local: glass importa theme
+    glass.install(app)
     controller = ThemeController(app)
     controller.apply()
     return controller

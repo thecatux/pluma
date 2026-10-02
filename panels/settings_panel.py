@@ -15,9 +15,9 @@ import time
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QFormLayout,
                                 QLabel, QFrame, QScrollArea, QSlider, QSpinBox, QCheckBox,
                                 QComboBox, QPushButton, QFileDialog, QMessageBox,
-                                QSizePolicy)
+                                QSizePolicy, QColorDialog)
 from PySide6.QtCore import Qt, QUrl
-from PySide6.QtGui import QFontDatabase, QDesktopServices
+from PySide6.QtGui import QColor, QFontDatabase, QDesktopServices
 
 import icons
 import theme
@@ -164,6 +164,33 @@ class SettingsPanel(QWidget):
             self.theme_combo.addItem(theme.MODE_LABELS["dark"], "dark")
             self.theme_combo.currentIndexChanged.connect(self._on_theme_changed)
             form.addRow("Tema", self.theme_combo)
+
+            accent_row = QHBoxLayout()
+            accent_row.setSpacing(8)
+            self.accent_swatch = QPushButton()
+            self.accent_swatch.setFixedSize(24, 24)
+            self.accent_swatch.setAccessibleName("Elegir color de acento")
+            self.accent_swatch.clicked.connect(self._choose_accent_color)
+            accent_row.addWidget(self.accent_swatch)
+
+            self.accent_value_label = QLabel()
+            self.accent_value_label.setMinimumWidth(72)
+            accent_row.addWidget(self.accent_value_label)
+
+            choose_accent_button = QPushButton("Elegir...")
+            choose_accent_button.clicked.connect(self._choose_accent_color)
+            accent_row.addWidget(choose_accent_button)
+
+            self.reset_accent_button = QPushButton("Restaurar")
+            self.reset_accent_button.clicked.connect(
+                lambda: self.theme_controller.set_accent_color(None)
+            )
+            accent_row.addWidget(self.reset_accent_button)
+            accent_row.addStretch(1)
+            form.addRow("Color de acento", accent_row)
+            theme.signals.changed.connect(self._refresh_accent_display)
+            self._refresh_accent_display()
+
             layout.addLayout(form)
         return card
 
@@ -303,6 +330,21 @@ class SettingsPanel(QWidget):
         if self._loading or self.theme_controller is None:
             return
         self.theme_controller.set_mode(self.theme_combo.currentData())
+
+    def _choose_accent_color(self):
+        current = QColor(self.theme_controller.accent_color)
+        selected = QColorDialog.getColor(current, self, "Color de acento")
+        if selected.isValid():
+            self.theme_controller.set_accent_color(selected.name())
+
+    def _refresh_accent_display(self, *_args):
+        color = self.theme_controller.accent_color
+        self.accent_value_label.setText(color.upper())
+        self.accent_swatch.setStyleSheet(
+            f"background-color: {color}; border: 1px solid {theme.colors()['border_strong']}; "
+            "border-radius: 5px; padding: 0;"
+        )
+        self.reset_accent_button.setEnabled(self.theme_controller.has_custom_accent)
 
     def _update_autosave_label(self, value: int):
         self.autosave_value_label.setText(f"{value / 1000:.1f} s")

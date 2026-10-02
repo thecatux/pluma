@@ -11,8 +11,9 @@ from PySide6.QtWidgets import (QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
                                 QListWidget, QListWidgetItem, QStackedWidget,
                                 QStatusBar, QLabel, QFrame, QPushButton, QToolBar)
 from PySide6.QtCore import Qt, QSize
-from PySide6.QtGui import QFont, QAction, QKeySequence
+from PySide6.QtGui import QFont, QAction, QKeySequence, QPainter
 
+import glass
 import icons
 import theme
 from db import Database
@@ -37,6 +38,8 @@ SECTIONS = [
 
 # Modos de la barra lateral, en el orden en que los recorre el botón.
 SIDEBAR_MODES = ("full", "icons", "hidden")
+# Anchos del cristal en sí; el contenedor suma el margen de la sombra
+# (`glass.GlassPanel.inset`) a cada lado.
 SIDEBAR_WIDTHS = {"full": 212, "icons": 66}
 # En modo solo iconos el logo se centra en el ancho reducido.
 SIDEBAR_HEADER_MARGINS = {"full": (20, 22, 20, 18), "icons": (23, 22, 23, 18)}
@@ -66,6 +69,8 @@ class MainWindow(QMainWindow):
         # del panel que se abandona, para no perder cambios recientes si
         # el usuario cambia de sección justo después de escribir.
         self.sidebar.currentRowChanged.connect(self._on_section_changed)
+        # El fondo con manchas de color depende del acento y del modo.
+        theme.signals.changed.connect(lambda *_: self.update())
 
     # ------------------------------------------------------------------ #
     def _build_sidebar_and_stack(self):
@@ -74,9 +79,15 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
-        self.sidebar_container = QWidget()
+        # Panel flotante de cristal líquido: sombra, relleno translúcido,
+        # reflejos y esquinas redondeadas se pintan en `glass.GlassPanel`.
+        # Deja `inset` px alrededor para la sombra, y el layout interior
+        # usa ese mismo margen.
+        self.sidebar_container = glass.GlassPanel(radius=24, inset=12)
+        self.sidebar_container.setObjectName("SidebarContainer")
+        inset = self.sidebar_container.inset
         sidebar_layout = QVBoxLayout(self.sidebar_container)
-        sidebar_layout.setContentsMargins(0, 0, 0, 0)
+        sidebar_layout.setContentsMargins(inset, inset, inset, inset)
         sidebar_layout.setSpacing(0)
 
         header = QFrame()
@@ -111,6 +122,9 @@ class MainWindow(QMainWindow):
         font = QFont()
         font.setPointSize(11)
         self.sidebar.setFont(font)
+        # Pastilla de cristal para el elemento activo / bajo el cursor.
+        self.sidebar.setItemDelegate(glass.SidebarItemDelegate(self.sidebar))
+        self.sidebar.setMouseTracking(True)
         sidebar_layout.addWidget(self.sidebar, 1)
 
         footer_divider = QFrame()
@@ -164,7 +178,7 @@ class MainWindow(QMainWindow):
 
     def _refresh_sidebar_icons(self, *_args):
         c = theme.colors()
-        self.app_icon_label.setPixmap(icons.pixmap("pen", c["sidebar_text_selected"], size=20))
+        self.app_icon_label.setPixmap(icons.pixmap("pen", c["primary_text"], size=20))
         self.switch_project_button.setIcon(icons.icon("library", c["on_primary"], size=16))
         for row in range(self.sidebar.count()):
             item = self.sidebar.item(row)
@@ -200,7 +214,8 @@ class MainWindow(QMainWindow):
         if mode == "hidden":
             return
         compact = mode == "icons"
-        self.sidebar_container.setFixedWidth(SIDEBAR_WIDTHS[mode])
+        self.sidebar_container.setFixedWidth(
+            SIDEBAR_WIDTHS[mode] + 2 * self.sidebar_container.inset)
         self.sidebar_header.layout().setContentsMargins(*SIDEBAR_HEADER_MARGINS[mode])
         self.app_title.setVisible(not compact)
         self.project_label.setVisible(not compact)
@@ -247,6 +262,15 @@ class MainWindow(QMainWindow):
         self.setStatusBar(status)
 
     # ------------------------------------------------------------------ #
+    def paintEvent(self, event):
+        # Primero el degradado del QSS y encima las manchas de color que
+        # el cristal "refracta" (ver `glass.paint_backdrop`).
+        super().paintEvent(event)
+        painter = QPainter(self)
+        painter.setClipRect(event.rect())
+        glass.paint_backdrop(painter, self.rect())
+        painter.end()
+
     def _on_section_changed(self, row: int):
         previous_row = self.stack.currentIndex()
         if previous_row != row and 0 <= previous_row < len(SECTIONS):
