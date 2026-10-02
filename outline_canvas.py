@@ -1020,6 +1020,7 @@ class TimelineCanvas(QWidget):
         self._query = ""
         self._rebuilding = False
         self._initial_view_pending = False
+        self._saved_view_state = None
         self._tool_buttons: list[QPushButton] = []
 
         root = QVBoxLayout(self)
@@ -1341,8 +1342,29 @@ class TimelineCanvas(QWidget):
 
     def showEvent(self, event):
         super().showEvent(event)
-        if self._initial_view_pending:
+        if self._saved_view_state is not None:
+            QTimer.singleShot(0, self._apply_saved_view)
+        elif self._initial_view_pending:
             QTimer.singleShot(0, self._apply_initial_view)
+
+    def restore_view(self, state):
+        try:
+            zoom = float(state["zoom"])
+            center = QPointF(float(state["center_x"]), float(state["center_y"]))
+        except (KeyError, TypeError, ValueError):
+            return
+        self._saved_view_state = (zoom, center)
+        self._initial_view_pending = False
+        if self.isVisible():
+            QTimer.singleShot(0, self._apply_saved_view)
+
+    def _apply_saved_view(self):
+        if self._saved_view_state is None:
+            return
+        zoom, center = self._saved_view_state
+        self._saved_view_state = None
+        self.view.set_zoom(zoom)
+        self.view.centerOn(center)
 
     def _apply_initial_view(self):
         if not self._initial_view_pending:

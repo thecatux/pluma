@@ -130,6 +130,12 @@ class Database:
                     page_count INTEGER NOT NULL DEFAULT 0
                 );
 
+                CREATE TABLE IF NOT EXISTS project_ui_state (
+                    project_id INTEGER PRIMARY KEY REFERENCES projects(id) ON DELETE CASCADE,
+                    state_json TEXT NOT NULL DEFAULT '{}',
+                    updated_at TEXT NOT NULL
+                );
+
                 CREATE TABLE IF NOT EXISTS chapters (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
@@ -325,6 +331,29 @@ class Database:
     def get_project(self, project_id: int) -> Optional[sqlite3.Row]:
         cur = self._conn.execute("SELECT * FROM projects WHERE id = ?", (project_id,))
         return cur.fetchone()
+
+    def get_project_ui_state(self, project_id: int) -> dict[str, Any]:
+        cur = self._conn.execute(
+            "SELECT state_json FROM project_ui_state WHERE project_id = ?", (project_id,)
+        )
+        row = cur.fetchone()
+        if row is None:
+            return {}
+        try:
+            state = json.loads(row["state_json"])
+        except (TypeError, json.JSONDecodeError):
+            return {}
+        return state if isinstance(state, dict) else {}
+
+    def save_project_ui_state(self, project_id: int, state: dict[str, Any]):
+        state_json = json.dumps(state, ensure_ascii=False)
+        with self._tx() as cur:
+            cur.execute(
+                "INSERT INTO project_ui_state (project_id, state_json, updated_at) "
+                "VALUES (?, ?, ?) ON CONFLICT(project_id) DO UPDATE SET "
+                "state_json = excluded.state_json, updated_at = excluded.updated_at",
+                (project_id, state_json, self._now()),
+            )
 
     def project_exists(self, project_id: int) -> bool:
         cur = self._conn.execute("SELECT 1 FROM projects WHERE id = ?", (project_id,))

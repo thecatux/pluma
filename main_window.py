@@ -10,8 +10,8 @@ clase solo hace de anfitrión y gestiona el cambio de proyecto.
 from PySide6.QtWidgets import (QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
                                 QListWidget, QListWidgetItem, QStackedWidget,
                                 QStatusBar, QLabel, QFrame, QPushButton, QToolBar)
-from PySide6.QtCore import Qt, QSize
-from PySide6.QtGui import QFont, QAction, QKeySequence, QPainter
+from PySide6.QtCore import Qt, QSize, QTimer
+from PySide6.QtGui import QFont, QAction, QKeySequence, QPainter, QTextCursor
 
 import glass
 import icons
@@ -57,6 +57,11 @@ class MainWindow(QMainWindow):
         self.db = db
         self.theme_controller = theme_controller
         self.project_id = None
+        self._restoring_ui_state = False
+        self._ui_state_timer = QTimer(self)
+        self._ui_state_timer.setSingleShot(True)
+        self._ui_state_timer.setInterval(700)
+        self._ui_state_timer.timeout.connect(self._save_ui_state)
         self.resize(1240, 780)
         self.setMinimumSize(920, 600)
 
@@ -69,6 +74,24 @@ class MainWindow(QMainWindow):
         # del panel que se abandona, para no perder cambios recientes si
         # el usuario cambia de sección justo después de escribir.
         self.sidebar.currentRowChanged.connect(self._on_section_changed)
+        for panel in self.panels.values():
+            list_widget = getattr(panel, "list_widget", None)
+            if list_widget is not None:
+                list_widget.currentItemChanged.connect(self._schedule_ui_state_save)
+        for key in ("chapters", "notes"):
+            panel = self.panels[key]
+            panel.editor.text_edit.cursorPositionChanged.connect(self._schedule_ui_state_save)
+            panel.editor.text_edit.verticalScrollBar().valueChanged.connect(
+                self._schedule_ui_state_save
+            )
+        chapters = self.panels["chapters"]
+        chapters.synopsis_toggle.toggled.connect(self._schedule_ui_state_save)
+        chapters.focus_button.toggled.connect(self._schedule_ui_state_save)
+        canvas = self.panels["outline"].canvas
+        canvas.scene.selectionChanged.connect(self._schedule_ui_state_save)
+        canvas.view.zoomChanged.connect(self._schedule_ui_state_save)
+        canvas.view.horizontalScrollBar().valueChanged.connect(self._schedule_ui_state_save)
+        canvas.view.verticalScrollBar().valueChanged.connect(self._schedule_ui_state_save)
         # El fondo con manchas de color depende del acento y del modo.
         theme.signals.changed.connect(lambda *_: self.update())
 
@@ -209,6 +232,7 @@ class MainWindow(QMainWindow):
 
     def _set_sidebar_mode(self, mode: str):
         self._sidebar_mode = mode
+        self._schedule_ui_state_save()
         self.sidebar_toggle_button.setToolTip(SIDEBAR_TOGGLE_TIPS[mode])
         self.sidebar_container.setVisible(mode != "hidden")
         if mode == "hidden":
@@ -284,16 +308,140 @@ class MainWindow(QMainWindow):
             refresh = getattr(self.panels[current_key], "refresh", None)
             if callable(refresh):
                 refresh()
+        self._schedule_ui_state_save()
 
     def load_project(self, project_id: int, project_name: str):
+        if self.project_id is not None:
+            self._ui_state_timer.stop()
+            for panel in self.panels.values():
+                flush = getattr(panel, "_flush_pending_save", None)
+                if callable(flush):
+                    flush()
+            self._save_ui_state()
+
+        state = self.db.get_project_ui_state(project_id)
+        self._restoring_ui_state = True
         self.project_id = project_id
         self.setWindowTitle(f"Pluma — {project_name}")
         self.project_label.setText(project_name)
         for panel in self.panels.values():
             panel.load_project(project_id)
-        if self.sidebar.currentRow() < 0:
-            self.sidebar.setCurrentRow(0)
+
+        selected = state.get("selected", {})
+        for key in ("chapters", "characters", "scenes", "notes"):
+            item_id = selected.get(key)
+            if item_id is not None:
+                self.panels[key]._reload_list(select_id=item_id)
+        outline_id = selected.get("outline")
+        outline_view = state.get("outline_view")
+        if outline_id is not None or isinstance(outline_view, dict):
+            outline_panel = self.panels["outline"]
+            has_outline_view = isinstance(outline_view, dict) and {
+                "zoom", "center_x", "center_y"
+            }.issubset(outline_view)
+            outline_panel._reload(reset_view=not has_outline_view, select_id=outline_id)
+            if has_outline_view:
+                outline_panel.canvas.restore_view(outline_view)
+
+        sidebar_mode = state.get("sidebar_mode")
+        if sidebar_mode in SIDEBAR_MODES:
+            self._set_sidebar_mode(sidebar_mode)
+        section = state.get("section")
+        section_keys = [key for key, _icon, _label in SECTIONS]
+        self.sidebar.setCurrentRow(section_keys.index(section) if section in section_keys else 0)
+
+        chapter_state = state.get("chapter_ui", {})
+        chapters = self.panels["chapters"]
+        if chapters._current_chapter_id is not None:
+            if "synopsis_expanded" in chapter_state:
+                chapters.synopsis_toggle.setChecked(bool(chapter_state["synopsis_expanded"]))
+            chapters.focus_button.setChecked(bool(chapter_state.get("focus_mode", False)))
+
+        writing = state.get("writing", {})
+        for key in ("chapters", "notes"):
+            editor_state = writing.get(key)
+            panel = self.panels[key]
+            current_id = getattr(panel, f"_current_{'chapter' if key == 'chapters' else 'note'}_id")
+            if editor_state and editor_state.get("item_id") == current_id:
+                self._restore_editor_state(panel, editor_state, key == section)
+
+        self._restoring_ui_state = False
         self.statusBar().showMessage(f"Proyecto abierto: {project_name}", 3000)
+
+    def _schedule_ui_state_save(self, *_args):
+        if self.project_id is not None and not self._restoring_ui_state:
+            self._ui_state_timer.start()
+
+    def _capture_editor_state(self, panel, item_id):
+        if item_id is None:
+            return None
+        text_edit = panel.editor.text_edit
+        cursor = text_edit.textCursor()
+        return {
+            "item_id": item_id,
+            "position": cursor.position(),
+            "anchor": cursor.anchor(),
+            "scroll": text_edit.verticalScrollBar().value(),
+            "had_focus": text_edit.hasFocus(),
+        }
+
+    def _capture_ui_state(self):
+        selected = {
+            "chapters": self.panels["chapters"]._current_chapter_id,
+            "characters": self.panels["characters"]._current_character_id,
+            "scenes": self.panels["scenes"]._current_scene_id,
+            "notes": self.panels["notes"]._current_note_id,
+            "outline": self.panels["outline"].canvas.selected_id(),
+        }
+        section_row = self.sidebar.currentRow()
+        section = SECTIONS[section_row][0] if 0 <= section_row < len(SECTIONS) else "info"
+        chapters = self.panels["chapters"]
+        canvas = self.panels["outline"].canvas
+        center = canvas.view.mapToScene(canvas.view.viewport().rect().center())
+        return {
+            "version": 1,
+            "section": section,
+            "sidebar_mode": self._sidebar_mode,
+            "selected": selected,
+            "outline_view": {
+                "zoom": canvas.view.zoom,
+                "center_x": center.x(),
+                "center_y": center.y(),
+            },
+            "chapter_ui": {
+                "synopsis_expanded": chapters.synopsis_toggle.isChecked(),
+                "focus_mode": chapters.focus_button.isChecked(),
+            },
+            "writing": {
+                "chapters": self._capture_editor_state(
+                    chapters, chapters._current_chapter_id
+                ),
+                "notes": self._capture_editor_state(
+                    self.panels["notes"], self.panels["notes"]._current_note_id
+                ),
+            },
+        }
+
+    def _save_ui_state(self):
+        if self.project_id is not None and not self._restoring_ui_state:
+            self.db.save_project_ui_state(self.project_id, self._capture_ui_state())
+
+    def _restore_editor_state(self, panel, state, restore_focus):
+        text_edit = panel.editor.text_edit
+        maximum = max(0, text_edit.document().characterCount() - 1)
+        position = max(0, min(int(state.get("position", 0)), maximum))
+        anchor = max(0, min(int(state.get("anchor", position)), maximum))
+        cursor = QTextCursor(text_edit.document())
+        cursor.setPosition(anchor)
+        cursor.setPosition(position, QTextCursor.KeepAnchor)
+        text_edit.setTextCursor(cursor)
+
+        def restore_scroll():
+            text_edit.verticalScrollBar().setValue(int(state.get("scroll", 0)))
+            if restore_focus and state.get("had_focus"):
+                text_edit.setFocus()
+
+        QTimer.singleShot(0, restore_scroll)
 
     def prompt_switch_project(self):
         dialog = ProjectDialog(self.db, self)
@@ -309,4 +457,6 @@ class MainWindow(QMainWindow):
             flush = getattr(panel, "_flush_pending_save", None)
             if callable(flush):
                 flush()
+        self._ui_state_timer.stop()
+        self._save_ui_state()
         event.accept()
