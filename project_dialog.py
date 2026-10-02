@@ -12,7 +12,9 @@ from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QListWidget,
                                 QListWidgetItem, QPushButton, QLabel, QInputDialog,
                                 QMessageBox, QLineEdit, QStackedWidget, QWidget)
 from PySide6.QtCore import Qt, QSize
+from PySide6.QtGui import QPainter
 
+import glass
 import icons
 import theme
 
@@ -33,9 +35,8 @@ class ProjectDialog(QDialog):
 
         title_row = QHBoxLayout()
         title_row.setSpacing(8)
-        title_icon = QLabel()
-        title_icon.setPixmap(icons.pixmap("pen", theme.colors()["text"], size=20))
-        title_row.addWidget(title_icon)
+        self.title_icon = QLabel()
+        title_row.addWidget(self.title_icon)
         title = QLabel("Tus novelas")
         title.setStyleSheet("font-size: 16pt; font-weight: 700;")
         title_row.addWidget(title)
@@ -44,6 +45,9 @@ class ProjectDialog(QDialog):
         subtitle = QLabel("Elige un proyecto para continuar o crea uno nuevo.")
         subtitle.setProperty("role", "hint")
         layout.addWidget(subtitle)
+
+        self._refresh_icons()
+        theme.signals.changed.connect(self._on_theme_changed)
 
         self.stack = QStackedWidget()
         self.stack.addWidget(self._build_empty_state())
@@ -76,6 +80,24 @@ class ProjectDialog(QDialog):
 
         self._reload_list()
 
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        painter = QPainter(self)
+        painter.setClipRect(event.rect())
+        glass.paint_backdrop(painter, self.rect())
+        painter.end()
+
+    def _refresh_icons(self):
+        c = theme.colors()
+        self.title_icon.setPixmap(icons.pixmap("pen", c["primary_text"], size=20))
+        if hasattr(self, "empty_icon"):
+            self.empty_icon.setPixmap(icons.pixmap("library", c["text_muted"], size=48))
+
+    def _on_theme_changed(self, *_args):
+        self._refresh_icons()
+        self._reload_list(select_id=self._current_project_id())
+        self.update()
+
     def _build_list_widget(self) -> QWidget:
         self.list_widget = QListWidget()
         self.list_widget.setSpacing(2)
@@ -87,10 +109,10 @@ class ProjectDialog(QDialog):
         empty = QWidget()
         layout = QVBoxLayout(empty)
         layout.addStretch(1)
-        icon = QLabel()
-        icon.setPixmap(icons.pixmap("library", theme.colors()["text_muted"], size=48))
-        icon.setAlignment(Qt.AlignCenter)
-        layout.addWidget(icon)
+        self.empty_icon = QLabel()
+        self.empty_icon.setPixmap(icons.pixmap("library", theme.colors()["text_muted"], size=48))
+        self.empty_icon.setAlignment(Qt.AlignCenter)
+        layout.addWidget(self.empty_icon)
         message = QLabel("Todavía no has creado ninguna novela")
         message.setAlignment(Qt.AlignCenter)
         message.setStyleSheet("font-size: 12pt; font-weight: 600;")

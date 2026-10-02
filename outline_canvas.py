@@ -691,7 +691,7 @@ class TimelineInspector(QFrame):
     def _apply_theme(self, *_args):
         c = theme.colors()
         self.setStyleSheet(
-            f"#TimelineInspector {{ background: {c['surface']}; border: none; border-left: 1px solid {c['border']}; }} "
+            f"#TimelineInspector {{ background: {c['card_glass']}; border: none; border-left: 1px solid {c['glass_border']}; }} "
             f"#InspectorCaption {{ color: {c['text_muted']}; font-size: 9pt; padding-top: 4px; }}"
         )
         self.close_btn.setIcon(icons.icon("x", c["text_muted"], size=14))
@@ -1139,9 +1139,10 @@ class TimelineCanvas(QWidget):
 
     def _apply_theme(self, *_args):
         c = theme.colors()
-        css = (f"QPushButton {{ border: none; border-radius: 6px; background: transparent; color: {c['text_secondary']}; }} "
-               f"QPushButton:hover {{ background: {c['surface_alt']}; }} "
-               f"QPushButton:checked {{ background: {c['primary_light']}; }}")
+        css = (f"QPushButton {{ border: 1px solid {c['glass_border']}; border-top-color: {c['rim_top']}; "
+               f"border-radius: 6px; background: {c['button_glass']}; color: {c['text_secondary']}; }} "
+               f"QPushButton:hover {{ background: {c['button_glass_hover']}; border-color: {c['text_muted']}; }} "
+               f"QPushButton:checked {{ background: {c['primary_light']}; border-color: {c['primary_border']}; }}")
         for btn in self._tool_buttons:
             btn.setStyleSheet(css)
             name = btn.property("icon_name")

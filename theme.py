@@ -518,6 +518,7 @@ def build_stylesheet(palette: dict) -> str:
     QFrame[role="field-row"] {{
         background: {c['glass_subtle']};
         border: 1px solid {c['glass_border']};
+        border-top-color: {c['rim_top']};
         border-radius: {RADIUS['md']}px;
     }}
     QFrame[role="divider"] {{
@@ -532,7 +533,12 @@ def build_stylesheet(palette: dict) -> str:
     QFrame[role="toolbar-strip"] {{
         background: {c['glass_subtle']};
         border: 1px solid {c['glass_border']};
+        border-top-color: {c['rim_top']};
         border-radius: {RADIUS['md']}px;
+    }}
+    QFrame[role="toolbar-strip"] QToolBar {{
+        background: transparent;
+        border: none;
     }}
 
     QScrollArea {{
@@ -595,8 +601,8 @@ def build_stylesheet(palette: dict) -> str:
     }}
 
     QMenuBar {{
-        background: {c['surface']};
-        border-bottom: 1px solid {c['border']};
+        background: {c['bar_glass']};
+        border-bottom: 1px solid {c['glass_border']};
         padding: 2px;
     }}
     QMenuBar::item {{

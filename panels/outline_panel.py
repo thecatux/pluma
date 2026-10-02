@@ -47,7 +47,7 @@ class OutlinePanel(QWidget):
     def _apply_theme(self, *_args):
         c = theme.colors()
         self.hint.setStyleSheet(
-            f"padding: 8px 14px; background: {c['surface_alt']}; border-bottom: 1px solid {c['border']};"
+            f"padding: 8px 14px; background: {c['glass_subtle']}; border-bottom: 1px solid {c['glass_border']};"
         )
 
     def load_project(self, project_id: int):

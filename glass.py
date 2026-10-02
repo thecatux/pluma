@@ -359,7 +359,7 @@ class _Sheen(QWidget):
 
 
 # role / clase -> (clave de theme.RADIUS, intensidad)
-_SHEEN_ROLES = {"card": ("lg", 0.55), "toolbar-strip": ("md", 0.40)}
+_SHEEN_ROLES = {"card": ("lg", 0.55), "toolbar-strip": ("md", 0.40), "field-row": ("md", 0.35)}
 
 
 class _SheenInstaller(QObject):
