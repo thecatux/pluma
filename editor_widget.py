@@ -39,11 +39,13 @@ from typing import Any, Callable, Optional
 
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QTextEdit, QFontComboBox,
                                 QComboBox, QColorDialog, QToolBar, QToolButton, QMenu)
-from PySide6.QtGui import QAction, QKeySequence, QFont, QTextCharFormat, QActionGroup, QTextCursor, QIcon
+from PySide6.QtGui import (QAction, QKeySequence, QFont, QTextCharFormat, QActionGroup, QTextCursor, QIcon,
+                           QShortcut)
 from PySide6.QtCore import Qt, QSize, Signal
 
 import icons
 import theme
+from find_replace import FindReplaceBar
 
 
 @dataclass(frozen=True)
@@ -222,6 +224,15 @@ class RichTextEditor(QWidget):
 
         self._create_actions()
 
+        # Panel flotante de buscar/reemplazar: hijo del editor, fuera del
+        # layout (no altera la interfaz). Ctrl+F / Ctrl+H solo actúan con
+        # el foco dentro de este editor.
+        self.find_bar = FindReplaceBar(self, self.text_edit)
+        for sequence, replace in (("Ctrl+F", False), ("Ctrl+H", True)):
+            shortcut = QShortcut(QKeySequence(sequence), self)
+            shortcut.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
+            shortcut.activated.connect(lambda replace=replace: self.find_bar.open_bar(replace))
+
         self.text_edit.document().modificationChanged.connect(self.modificationChanged)
         self.text_edit.textChanged.connect(self.contentChanged)
 
@@ -284,6 +295,9 @@ class RichTextEditor(QWidget):
         self.color_action = self._make_action("Color de fuente...", None,
                                                "Cambiar el color de la fuente", self.choose_font_color)
 
+        self.search_action = self._make_action("Buscar", None, "Buscar y reemplazar (Ctrl+F)",
+                                               lambda *_: self.find_bar.open_bar())
+
         self.font_combo = QFontComboBox()
         self.font_combo.setStatusTip("Seleccione tipo de fuente")
         self.font_combo.setMinimumWidth(170)
@@ -334,6 +348,7 @@ class RichTextEditor(QWidget):
         toolbar.addWidget(self.font_combo)
         toolbar.addWidget(self.size_combo)
         toolbar.addAction(self.color_action)
+        toolbar.addWidget(self._icon_only_button(self.search_action))
         return toolbar
 
     def _icon_only_button(self, action: QAction) -> QToolButton:
@@ -351,6 +366,7 @@ class RichTextEditor(QWidget):
             align_icon.addPixmap(icons.pixmap(name, c["text"], size=16), QIcon.Normal, QIcon.Off)
             align_icon.addPixmap(icons.pixmap(name, c["primary_text"], size=16), QIcon.Normal, QIcon.On)
             action.setIcon(align_icon)
+        self.search_action.setIcon(icons.icon("search", c["text"], size=16))
 
     def _glyph_button(self, action: QAction, key: str):
         button = QToolButton()

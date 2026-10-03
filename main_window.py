@@ -10,7 +10,7 @@ clase solo hace de anfitrión y gestiona el cambio de proyecto.
 from PySide6.QtWidgets import (QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
                                 QListWidget, QListWidgetItem, QStackedWidget,
                                 QStatusBar, QLabel, QFrame, QPushButton, QToolBar)
-from PySide6.QtCore import Qt, QSize, QTimer
+from PySide6.QtCore import Qt, QSize, QTimer, QSettings
 from PySide6.QtGui import QFont, QAction, QKeySequence, QPainter, QTextCursor
 
 import glass
@@ -62,8 +62,12 @@ class MainWindow(QMainWindow):
         self._ui_state_timer.setSingleShot(True)
         self._ui_state_timer.setInterval(700)
         self._ui_state_timer.timeout.connect(self._save_ui_state)
+        self._window_settings = QSettings()
         self.resize(1240, 780)
         self.setMinimumSize(920, 600)
+        geometry = self._window_settings.value("window/geometry")
+        if geometry is not None:
+            self.restoreGeometry(geometry)
 
         self._build_sidebar_and_stack()
         self._build_global_controls()
@@ -469,4 +473,5 @@ class MainWindow(QMainWindow):
                     flush()
         self._ui_state_timer.stop()
         self._save_ui_state()
+        self._window_settings.setValue("window/geometry", self.saveGeometry())
         event.accept()
