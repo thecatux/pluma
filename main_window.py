@@ -24,6 +24,7 @@ from panels.characters_panel import CharactersPanel
 from panels.scenes_panel import ScenesPanel
 from panels.outline_panel import OutlinePanel
 from panels.notes_panel import NotesPanel
+from panels.export_panel import ExportPanel
 from panels.settings_panel import SettingsPanel
 
 SECTIONS = [
@@ -33,6 +34,7 @@ SECTIONS = [
     ("scenes", "clapper", "Escenas"),
     ("outline", "timeline", "Línea temporal"),
     ("notes", "note", "Notas"),
+    ("export", "export", "Exportar"),
     ("settings", "settings", "Ajustes"),
 ]
 
@@ -184,6 +186,7 @@ class MainWindow(QMainWindow):
         self.panels["scenes"] = ScenesPanel(self.db)
         self.panels["outline"] = OutlinePanel(self.db)
         self.panels["notes"] = NotesPanel(self.db)
+        self.panels["export"] = ExportPanel(self.db)
         self.panels["settings"] = SettingsPanel(self.db, self.theme_controller)
         self.panels["settings"].database_restored.connect(self._on_database_restored)
 

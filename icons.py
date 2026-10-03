@@ -83,6 +83,10 @@ _ICON_BODIES = {
         '<line x1="8" y1="13" x2="16" y2="13"/>'
         '<line x1="8" y1="16.8" x2="13" y2="16.8"/>'
     ),
+    "export": (
+        '<path d="M12 15V3"/><polyline points="7,8 12,3 17,8"/>'
+        '<path d="M5 14v5c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2v-5"/>'
+    ),
     "settings": _gear_teeth() + '<circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.6"/>',
 
     # -- Identidad / diálogo de proyectos ------------------------------ #
