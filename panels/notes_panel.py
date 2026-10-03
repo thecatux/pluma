@@ -7,6 +7,7 @@ nota tiene un título y contenido de texto enriquecido, con la fecha de
 """
 
 from PySide6.QtWidgets import (QWidget, QHBoxLayout, QVBoxLayout, QListWidget,
+                                QAbstractItemView,
                                 QListWidgetItem, QPushButton, QLabel, QLineEdit,
                                 QSplitter, QMessageBox, QStackedWidget, QFrame)
 from PySide6.QtCore import Qt, QTimer
@@ -62,9 +63,16 @@ class NotesPanel(QWidget):
         left_layout.addWidget(title)
 
         self.list_widget = QListWidget()
+        self.list_widget.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
+        self.list_widget.setDefaultDropAction(Qt.DropAction.MoveAction)
         self.list_widget.setSpacing(2)
+        self.list_widget.model().rowsMoved.connect(self._on_rows_moved)
         self.list_widget.currentItemChanged.connect(self._on_selection_changed)
         left_layout.addWidget(self.list_widget, 1)
+
+        hint = QLabel("Arrastra una nota para reordenarla")
+        hint.setProperty("role", "muted")
+        left_layout.addWidget(hint)
 
         buttons_row = QHBoxLayout()
         self.add_button = QPushButton("+ Añadir")
@@ -187,6 +195,16 @@ class NotesPanel(QWidget):
             self._show_empty_state()
             return
         self._load_note(current.data(Qt.UserRole))
+
+    def _on_rows_moved(self, *_args):
+        if self._loading or self.project_id is None:
+            return
+        ordered_ids = [
+            self.list_widget.item(i).data(Qt.ItemDataRole.UserRole)
+            for i in range(self.list_widget.count())
+        ]
+        self.db.reorder_notes(self.project_id, ordered_ids)
+        self._reload_list(select_id=self._current_note_id)
 
     def _load_note(self, note_id: int):
         row = self.db.get_note(note_id)

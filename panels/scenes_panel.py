@@ -10,6 +10,7 @@ relacionada cada una.
 """
 
 from PySide6.QtWidgets import (QWidget, QHBoxLayout, QVBoxLayout, QListWidget,
+                                QAbstractItemView,
                                 QListWidgetItem, QPushButton, QLabel, QLineEdit,
                                 QSplitter, QMessageBox, QScrollArea, QInputDialog,
                                 QGroupBox, QStackedWidget, QLayout, QFrame, QSizePolicy)
@@ -156,9 +157,16 @@ class ScenesPanel(QWidget):
         left_layout.addWidget(title)
 
         self.list_widget = QListWidget()
+        self.list_widget.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
+        self.list_widget.setDefaultDropAction(Qt.DropAction.MoveAction)
         self.list_widget.setSpacing(2)
+        self.list_widget.model().rowsMoved.connect(self._on_rows_moved)
         self.list_widget.currentItemChanged.connect(self._on_selection_changed)
         left_layout.addWidget(self.list_widget, 1)
+
+        hint = QLabel("Arrastra una escena para reordenarla")
+        hint.setProperty("role", "muted")
+        left_layout.addWidget(hint)
 
         buttons_row = QHBoxLayout()
         self.add_button = QPushButton("+ Añadir")
@@ -314,6 +322,16 @@ class ScenesPanel(QWidget):
             self._show_empty_state()
             return
         self._load_scene(current.data(Qt.UserRole))
+
+    def _on_rows_moved(self, *_args):
+        if self._loading or self.project_id is None:
+            return
+        ordered_ids = [
+            self.list_widget.item(i).data(Qt.ItemDataRole.UserRole)
+            for i in range(self.list_widget.count())
+        ]
+        self.db.reorder_scenes(self.project_id, ordered_ids)
+        self._reload_list(select_id=self._current_scene_id)
 
     def _load_scene(self, scene_id: int):
         row = self.db.get_scene(scene_id)

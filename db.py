@@ -470,6 +470,14 @@ class Database:
         with self._tx() as cur:
             cur.execute("DELETE FROM characters WHERE id = ?", (character_id,))
 
+    def reorder_characters(self, project_id: int, ordered_ids: list[int]):
+        with self._tx() as cur:
+            for index, character_id in enumerate(ordered_ids):
+                cur.execute(
+                    "UPDATE characters SET order_index = ? WHERE id = ? AND project_id = ?",
+                    (index, character_id, project_id),
+                )
+
     def list_character_fields(self, character_id: int) -> list[sqlite3.Row]:
         cur = self._conn.execute(
             "SELECT * FROM character_fields WHERE character_id = ? ORDER BY order_index, id",
@@ -538,6 +546,14 @@ class Database:
     def delete_scene(self, scene_id: int):
         with self._tx() as cur:
             cur.execute("DELETE FROM scenes WHERE id = ?", (scene_id,))
+
+    def reorder_scenes(self, project_id: int, ordered_ids: list[int]):
+        with self._tx() as cur:
+            for index, scene_id in enumerate(ordered_ids):
+                cur.execute(
+                    "UPDATE scenes SET order_index = ? WHERE id = ? AND project_id = ?",
+                    (index, scene_id, project_id),
+                )
 
     def list_scene_fields(self, scene_id: int) -> list[sqlite3.Row]:
         cur = self._conn.execute(
@@ -676,6 +692,14 @@ class Database:
     def delete_note(self, note_id: int):
         with self._tx() as cur:
             cur.execute("DELETE FROM notes WHERE id = ?", (note_id,))
+
+    def reorder_notes(self, project_id: int, ordered_ids: list[int]):
+        with self._tx() as cur:
+            for index, note_id in enumerate(ordered_ids):
+                cur.execute(
+                    "UPDATE notes SET order_index = ? WHERE id = ? AND project_id = ?",
+                    (index, note_id, project_id),
+                )
 
     # ------------------------------------------------------------------ #
     # Utilidad genérica

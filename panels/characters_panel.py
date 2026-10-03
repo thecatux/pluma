@@ -9,6 +9,7 @@ quiera con "+ Añadir campo".
 """
 
 from PySide6.QtWidgets import (QWidget, QHBoxLayout, QVBoxLayout, QListWidget,
+                                QAbstractItemView,
                                 QListWidgetItem, QPushButton, QLabel, QLineEdit,
                                 QSplitter, QMessageBox, QScrollArea, QInputDialog,
                                 QStackedWidget)
@@ -67,9 +68,16 @@ class CharactersPanel(QWidget):
         left_layout.addWidget(title)
 
         self.list_widget = QListWidget()
+        self.list_widget.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
+        self.list_widget.setDefaultDropAction(Qt.DropAction.MoveAction)
         self.list_widget.setSpacing(2)
+        self.list_widget.model().rowsMoved.connect(self._on_rows_moved)
         self.list_widget.currentItemChanged.connect(self._on_selection_changed)
         left_layout.addWidget(self.list_widget, 1)
+
+        hint = QLabel("Arrastra un personaje para reordenarlo")
+        hint.setProperty("role", "muted")
+        left_layout.addWidget(hint)
 
         buttons_row = QHBoxLayout()
         self.add_button = QPushButton("+ Añadir")
@@ -192,6 +200,16 @@ class CharactersPanel(QWidget):
             self._show_empty_state()
             return
         self._load_character(current.data(Qt.UserRole))
+
+    def _on_rows_moved(self, *_args):
+        if self._loading or self.project_id is None:
+            return
+        ordered_ids = [
+            self.list_widget.item(i).data(Qt.ItemDataRole.UserRole)
+            for i in range(self.list_widget.count())
+        ]
+        self.db.reorder_characters(self.project_id, ordered_ids)
+        self._reload_list(select_id=self._current_character_id)
 
     def _load_character(self, character_id: int):
         row = self.db.get_character(character_id)
