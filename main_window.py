@@ -181,6 +181,7 @@ class MainWindow(QMainWindow):
         self.panels["outline"] = OutlinePanel(self.db)
         self.panels["notes"] = NotesPanel(self.db)
         self.panels["settings"] = SettingsPanel(self.db, self.theme_controller)
+        self.panels["settings"].database_restored.connect(self._on_database_restored)
 
         for key, icon_name, _label in SECTIONS:
             item = QListWidgetItem()
@@ -449,14 +450,23 @@ class MainWindow(QMainWindow):
             row = next(p for p in self.db.list_projects() if p["id"] == dialog.selected_project_id)
             self.load_project(row["id"], row["name"])
 
+    def _on_database_restored(self):
+        # Los paneles muestran datos de la base de datos anterior, así que
+        # Pluma se cierra. Con project_id a None, el cierre no vuelca esos
+        # datos (ni el estado de la interfaz) sobre la base restaurada.
+        self._ui_state_timer.stop()
+        self.project_id = None
+        self.close()
+
     def closeEvent(self, event):
         # Cada panel gestiona su propio autoguardado con un pequeño
         # retardo; al cerrar la aplicación forzamos que se vuelque
         # cualquier cambio pendiente para no perder la última edición.
-        for panel in self.panels.values():
-            flush = getattr(panel, "_flush_pending_save", None)
-            if callable(flush):
-                flush()
+        if self.project_id is not None:
+            for panel in self.panels.values():
+                flush = getattr(panel, "_flush_pending_save", None)
+                if callable(flush):
+                    flush()
         self._ui_state_timer.stop()
         self._save_ui_state()
         event.accept()

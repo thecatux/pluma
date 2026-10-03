@@ -111,6 +111,30 @@ class Database:
         finally:
             dest.close()
 
+    def restore_from(self, src_path: str):
+        """Sustituye el contenido de la base de datos abierta por el de la
+        copia `src_path` (hecha con `backup_to`). Usa la API de backup de
+        SQLite en sentido inverso, de modo que la conexión actual sigue
+        siendo válida y no hay que cerrar ni reabrir nada con la app en
+        marcha. Lanza ValueError si el archivo no es una copia de Pluma;
+        si la copia falla a mitad, la base de datos actual queda intacta.
+        """
+        src = sqlite3.connect(src_path)
+        try:
+            try:
+                tables = {row[0] for row in src.execute(
+                    "SELECT name FROM sqlite_master WHERE type = 'table'")}
+            except sqlite3.DatabaseError:  # no es un archivo SQLite
+                tables = set()
+            if not {"projects", "chapters"} <= tables:
+                raise ValueError("El archivo seleccionado no es una copia de seguridad de Pluma.")
+            src.backup(self._conn)
+        finally:
+            src.close()
+        # Una copia hecha con una versión anterior puede carecer de
+        # columnas añadidas después: las migraciones las completan.
+        self._init_schema()
+
     # ------------------------------------------------------------------ #
     # Esquema
     # ------------------------------------------------------------------ #

@@ -16,12 +16,14 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, Q
                                 QLabel, QFrame, QScrollArea, QSlider, QSpinBox, QCheckBox,
                                 QComboBox, QPushButton, QFileDialog, QMessageBox,
                                 QSizePolicy, QColorDialog)
-from PySide6.QtCore import Qt, QUrl
+from PySide6.QtCore import Qt, QUrl, Signal
 from PySide6.QtGui import QColor, QFontDatabase, QDesktopServices
 
 import icons
 import theme
 from app_settings import settings
+
+BACKUP_FILTER = "Base de datos SQLite (*.db)"
 
 
 class _ResponsiveCardGrid(QWidget):
@@ -64,6 +66,11 @@ class _ResponsiveCardGrid(QWidget):
 
 
 class SettingsPanel(QWidget):
+    # Se emite tras restaurar una copia de seguridad: la aplicación debe
+    # reiniciarse, porque los demás paneles tienen cargados datos de la
+    # base de datos anterior.
+    database_restored = Signal()
+
     def __init__(self, db, theme_controller=None, parent=None):
         super().__init__(parent)
         self.db = db
@@ -283,8 +290,11 @@ class SettingsPanel(QWidget):
         backup_button = QPushButton("Crear copia de seguridad...")
         backup_button.setProperty("variant", "primary")
         backup_button.clicked.connect(self._create_backup)
+        restore_button = QPushButton("Restaurar copia de seguridad...")
+        restore_button.clicked.connect(self._restore_backup)
         buttons_row.addWidget(open_folder_button)
         buttons_row.addWidget(backup_button)
+        buttons_row.addWidget(restore_button)
         buttons_row.addStretch(1)
         layout.addLayout(buttons_row)
 
@@ -382,16 +392,17 @@ class SettingsPanel(QWidget):
     # ------------------------------------------------------------------ #
     # Datos
     # ------------------------------------------------------------------ #
+    def _data_dir(self) -> str:
+        return os.path.dirname(os.path.abspath(self.db.path))
+
     def _open_data_folder(self):
-        folder = os.path.dirname(os.path.abspath(self.db.path))
-        QDesktopServices.openUrl(QUrl.fromLocalFile(folder))
+        QDesktopServices.openUrl(QUrl.fromLocalFile(self._data_dir()))
 
     def _create_backup(self):
         default_name = f"pluma-copia-{time.strftime('%Y%m%d-%H%M%S')}.db"
-        default_dir = os.path.dirname(os.path.abspath(self.db.path))
         dest_path, _ = QFileDialog.getSaveFileName(
-            self, "Guardar copia de seguridad", os.path.join(default_dir, default_name),
-            "Base de datos SQLite (*.db)",
+            self, "Guardar copia de seguridad", os.path.join(self._data_dir(), default_name),
+            BACKUP_FILTER,
         )
         if not dest_path:
             return
@@ -403,6 +414,38 @@ class SettingsPanel(QWidget):
         self.backup_status_icon.setPixmap(icons.pixmap("check", theme.colors()["success"], size=13))
         self.backup_status_icon.setVisible(True)
         self.backup_status_label.setText(f"Copia guardada en {dest_path}")
+
+    def _restore_backup(self):
+        src_path, _ = QFileDialog.getOpenFileName(
+            self, "Seleccionar copia de seguridad", self._data_dir(), BACKUP_FILTER,
+        )
+        if not src_path:
+            return
+        # Restaurar sustituye TODOS los proyectos actuales, así que se
+        # pregunta siempre (no depende de "confirmar antes de eliminar").
+        answer = QMessageBox.question(
+            self, "Restaurar copia de seguridad",
+            "Se reemplazarán todos los proyectos actuales por los de la copia "
+            "seleccionada.\n\nAntes se guardará una copia de los datos actuales "
+            "en la carpeta de datos. Al terminar, Pluma se cerrará y tendrás que "
+            "abrirla de nuevo. ¿Continuar?",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
+        )
+        if answer != QMessageBox.Yes:
+            return
+        safety_name = f"pluma-antes-de-restaurar-{time.strftime('%Y%m%d-%H%M%S')}.db"
+        try:
+            self.db.backup_to(os.path.join(self._data_dir(), safety_name))
+            self.db.restore_from(src_path)
+        except Exception as e:
+            QMessageBox.warning(self, "No se pudo restaurar la copia", str(e))
+            return
+        QMessageBox.information(
+            self, "Copia restaurada",
+            "La copia se ha restaurado correctamente.\n\n"
+            "Pluma se cerrará ahora: ábrela de nuevo para continuar.",
+        )
+        self.database_restored.emit()
 
     # ------------------------------------------------------------------ #
     # Interfaz esperada por MainWindow (no depende de un proyecto)
