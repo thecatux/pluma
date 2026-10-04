@@ -16,6 +16,7 @@ from PySide6.QtGui import QFont, QAction, QKeySequence, QPainter, QTextCursor
 import glass
 import icons
 import theme
+from about_dialog import AboutDialog
 from db import Database
 from project_dialog import ProjectDialog
 from panels.info_panel import InfoPanel
@@ -234,6 +235,26 @@ class MainWindow(QMainWindow):
             icons.icon("sidebar", theme.colors()["text_secondary"], size=16)
         )
 
+    def _build_about_button(self, toolbar):
+        self.about_button = QPushButton()
+        self.about_button.setProperty("variant", "flat")
+        self.about_button.setIconSize(QSize(16, 16))
+        self.about_button.setFixedSize(34, 34)
+        self.about_button.setToolTip("Acerca de Pluma")
+        self.about_button.setAccessibleName("Acerca de Pluma")
+        self.about_button.clicked.connect(self._show_about_dialog)
+        toolbar.addWidget(self.about_button)
+        self._refresh_about_icon()
+        theme.signals.changed.connect(self._refresh_about_icon)
+
+    def _refresh_about_icon(self, *_args):
+        self.about_button.setIcon(
+            icons.icon("info", theme.colors()["text_secondary"], size=16)
+        )
+
+    def _show_about_dialog(self):
+        AboutDialog(self).exec()
+
     def _cycle_sidebar_mode(self):
         next_index = (SIDEBAR_MODES.index(self._sidebar_mode) + 1) % len(SIDEBAR_MODES)
         self._set_sidebar_mode(SIDEBAR_MODES[next_index])
@@ -270,6 +291,7 @@ class MainWindow(QMainWindow):
         toolbar.setFloatable(False)
         self.addToolBar(Qt.ToolBarArea.TopToolBarArea, toolbar)
         self._build_sidebar_toggle(toolbar)
+        self._build_about_button(toolbar)
 
         switch_action = QAction("Cambiar de proyecto...", self)
         switch_action.setShortcut(QKeySequence("Ctrl+Shift+P"))
