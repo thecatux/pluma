@@ -641,10 +641,10 @@ class TimelineInspector(QFrame):
         layout.addWidget(self.note_edit, 1)
 
         footer = QHBoxLayout()
-        self.dup_btn = QPushButton(" Duplicar")
+        self.dup_btn = QPushButton("Duplicar")
         self.dup_btn.clicked.connect(lambda: self._emit_for_block(self.duplicateRequested))
         footer.addWidget(self.dup_btn)
-        self.del_btn = QPushButton(" Eliminar")
+        self.del_btn = QPushButton("Eliminar")
         self.del_btn.setProperty("variant", "danger")
         self.del_btn.clicked.connect(lambda: self._emit_for_block(self.deleteRequested))
         footer.addWidget(self.del_btn)
@@ -1143,7 +1143,7 @@ class TimelineCanvas(QWidget):
         css = (f"QPushButton {{ border: 1px solid {c['glass_border']}; border-top-color: {c['rim_top']}; "
                f"border-radius: 6px; background: {c['button_glass']}; color: {c['text_secondary']}; }} "
                f"QPushButton:hover {{ background: {c['button_glass_hover']}; border-color: {c['text_muted']}; }} "
-               f"QPushButton:checked {{ background: {c['primary_light']}; border-color: {c['primary_border']}; }}")
+               f"QPushButton:checked {{ background: {c['primary_light']}; border-color: {c['primary_border']}; color: {c['primary_text']}; }}")
         for btn in self._tool_buttons:
             btn.setStyleSheet(css)
             name = btn.property("icon_name")

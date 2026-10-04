@@ -130,7 +130,7 @@ class ChaptersPanel(QWidget):
         left_layout.addWidget(hint)
 
         buttons_row = QHBoxLayout()
-        self.add_button = QPushButton("+ Añadir capítulo")
+        self.add_button = QPushButton("+ Añadir")
         self.add_button.setProperty("variant", "primary")
         self.add_button.clicked.connect(self.add_chapter)
         self.remove_button = QPushButton("Eliminar")
@@ -240,7 +240,7 @@ class ChaptersPanel(QWidget):
 
         self.synopsis_edit = QPlainTextEdit()
         self.synopsis_edit.setMaximumHeight(72)
-        self.synopsis_edit.setPlaceholderText("Resumen breve de lo que ocurre en este capítulo...")
+        self.synopsis_edit.setPlaceholderText("Resumen breve de lo que ocurre en este capítulo…")
         self.synopsis_edit.textChanged.connect(self._schedule_save)
         self.synopsis_edit.setVisible(False)
         content_layout.addWidget(self.synopsis_edit)

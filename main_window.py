@@ -293,7 +293,7 @@ class MainWindow(QMainWindow):
         self._build_sidebar_toggle(toolbar)
         self._build_about_button(toolbar)
 
-        switch_action = QAction("Cambiar de proyecto...", self)
+        switch_action = QAction("Cambiar de proyecto…", self)
         switch_action.setShortcut(QKeySequence("Ctrl+Shift+P"))
         switch_action.setShortcutContext(Qt.ShortcutContext.ApplicationShortcut)
         switch_action.triggered.connect(self.prompt_switch_project)

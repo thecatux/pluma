@@ -139,6 +139,12 @@ _ICON_BODIES = {
         '<line x1="4" y1="7" x2="20" y2="7"/><path d="M9 7V4.5h6V7"/><path d="M6.5 7l1 13h9l1-13"/>'
         '<line x1="10.5" y1="11" x2="10.5" y2="16"/><line x1="13.5" y1="11" x2="13.5" y2="16"/>'
     ),
+    "palette": (
+        '<circle cx="13.5" cy="6.5" r="1" fill="{color}" stroke="none"/>'
+        '<circle cx="17.5" cy="10.5" r="1" fill="{color}" stroke="none"/>'
+        '<circle cx="8.5" cy="7.5" r="1" fill="{color}" stroke="none"/>'
+        '<path d="M12 3a9 9 0 0 0 0 18c1.3 0 2.4-1.1 2.4-2.4 0-.6-.2-1.1-.6-1.5-.4-.4-.6-.9-.6-1.5 0-1.3 1.1-2.4 2.4-2.4H17a4 4 0 0 0 4-4c0-4.4-4-6.2-9-6.2z"/>'
+    ),
 
     # -- Alineación del editor de texto ---------------------------------- #
     "align-left": (

@@ -46,13 +46,13 @@ class ProjectDialog(QDialog):
         subtitle.setProperty("role", "hint")
         layout.addWidget(subtitle)
 
-        self._refresh_icons()
-        theme.signals.changed.connect(self._on_theme_changed)
-
         self.stack = QStackedWidget()
         self.stack.addWidget(self._build_empty_state())
         self.stack.addWidget(self._build_list_widget())
         layout.addWidget(self.stack, 1)
+
+        self._refresh_icons()
+        theme.signals.changed.connect(self._on_theme_changed)
 
         buttons = QHBoxLayout()
         new_btn = QPushButton("+ Nuevo proyecto")
@@ -91,7 +91,7 @@ class ProjectDialog(QDialog):
         c = theme.colors()
         self.title_icon.setPixmap(icons.pixmap("pen", c["primary_text"], size=20))
         if hasattr(self, "empty_icon"):
-            self.empty_icon.setPixmap(icons.pixmap("library", c["text_muted"], size=48))
+            self.empty_icon.setPixmap(icons.pixmap("library", c["text_muted"], size=52))
 
     def _on_theme_changed(self, *_args):
         self._refresh_icons()
@@ -110,7 +110,7 @@ class ProjectDialog(QDialog):
         layout = QVBoxLayout(empty)
         layout.addStretch(1)
         self.empty_icon = QLabel()
-        self.empty_icon.setPixmap(icons.pixmap("library", theme.colors()["text_muted"], size=48))
+        self.empty_icon.setPixmap(icons.pixmap("library", theme.colors()["text_muted"], size=52))
         self.empty_icon.setAlignment(Qt.AlignCenter)
         layout.addWidget(self.empty_icon)
         message = QLabel("Todavía no has creado ninguna novela")

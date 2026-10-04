@@ -292,7 +292,7 @@ class RichTextEditor(QWidget):
             self.align_group.addAction(action)
             self.align_actions[opt.alignment] = action
 
-        self.color_action = self._make_action("Color de fuente...", None,
+        self.color_action = self._make_action("Color de fuente…", None,
                                                "Cambiar el color de la fuente", self.choose_font_color)
 
         self.search_action = self._make_action("Buscar", None, "Buscar y reemplazar (Ctrl+F)",
@@ -347,7 +347,7 @@ class RichTextEditor(QWidget):
         toolbar.addSeparator()
         toolbar.addWidget(self.font_combo)
         toolbar.addWidget(self.size_combo)
-        toolbar.addAction(self.color_action)
+        toolbar.addWidget(self._icon_only_button(self.color_action))
         toolbar.addWidget(self._icon_only_button(self.search_action))
         return toolbar
 
@@ -366,6 +366,7 @@ class RichTextEditor(QWidget):
             align_icon.addPixmap(icons.pixmap(name, c["text"], size=16), QIcon.Normal, QIcon.Off)
             align_icon.addPixmap(icons.pixmap(name, c["primary_text"], size=16), QIcon.Normal, QIcon.On)
             action.setIcon(align_icon)
+        self.color_action.setIcon(icons.icon("palette", c["text"], size=16))
         self.search_action.setIcon(icons.icon("search", c["text"], size=16))
 
     def _glyph_button(self, action: QAction, key: str):

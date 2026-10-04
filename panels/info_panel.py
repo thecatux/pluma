@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QFormLayout, QLabel,
 from PySide6.QtCore import Qt, QTimer
 
 from db import DEFAULT_GENRES
+from app_settings import settings, signals as settings_signals
 
 
 class InfoPanel(QWidget):
@@ -25,8 +26,9 @@ class InfoPanel(QWidget):
 
         self._save_timer = QTimer(self)
         self._save_timer.setSingleShot(True)
-        self._save_timer.setInterval(600)
+        self._save_timer.setInterval(settings.autosave_interval_ms)
         self._save_timer.timeout.connect(self._save_info)
+        settings_signals.changed.connect(self._apply_settings)
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -65,6 +67,9 @@ class InfoPanel(QWidget):
         layout.addWidget(scroll)
 
     # ------------------------------------------------------------------ #
+    def _apply_settings(self):
+        self._save_timer.setInterval(settings.autosave_interval_ms)
+
     def _build_card(self) -> QFrame:
         card = QFrame()
         card.setProperty("role", "card")
@@ -113,7 +118,7 @@ class InfoPanel(QWidget):
 
         self.synopsis_edit = QPlainTextEdit()
         self.synopsis_edit.setPlaceholderText(
-            "De qué trata la novela, en unas pocas frases..."
+            "De qué trata la novela, en unas pocas frases…"
         )
         self.synopsis_edit.setMinimumHeight(140)
         self.synopsis_edit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)

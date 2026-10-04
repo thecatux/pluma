@@ -184,7 +184,7 @@ class SettingsPanel(QWidget):
             self.accent_value_label.setMinimumWidth(72)
             accent_row.addWidget(self.accent_value_label)
 
-            choose_accent_button = QPushButton("Elegir...")
+            choose_accent_button = QPushButton("Elegir…")
             choose_accent_button.clicked.connect(self._choose_accent_color)
             accent_row.addWidget(choose_accent_button)
 
@@ -287,10 +287,10 @@ class SettingsPanel(QWidget):
         buttons_row = QHBoxLayout()
         open_folder_button = QPushButton("Abrir carpeta de datos")
         open_folder_button.clicked.connect(self._open_data_folder)
-        backup_button = QPushButton("Crear copia de seguridad...")
+        backup_button = QPushButton("Crear copia de seguridad…")
         backup_button.setProperty("variant", "primary")
         backup_button.clicked.connect(self._create_backup)
-        restore_button = QPushButton("Restaurar copia de seguridad...")
+        restore_button = QPushButton("Restaurar copia de seguridad…")
         restore_button.clicked.connect(self._restore_backup)
         buttons_row.addWidget(open_folder_button)
         buttons_row.addWidget(backup_button)
