@@ -41,8 +41,17 @@ class AppSettings:
     externo) siempre ven el valor vigente.
     """
 
-    def __init__(self):
-        self._settings = QSettings()
+    @property
+    def _settings(self) -> QSettings:
+        # Se crea en cada acceso y no en __init__: `settings` (abajo) se
+        # instancia al importar el módulo, normalmente ANTES de que la
+        # aplicación llame a setOrganizationName/setApplicationName. Un
+        # QSettings() creado tan pronto queda sin organización ni nombre
+        # de aplicación y no puede leer ni escribir en disco (status
+        # AccessError), de modo que los cambios se perdían al reiniciar.
+        # Crearlo bajo demanda es barato y todas las instancias comparten
+        # el mismo almacén.
+        return QSettings()
 
     # -- Autoguardado -------------------------------------------------- #
     @property

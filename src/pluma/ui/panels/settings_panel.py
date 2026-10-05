@@ -326,9 +326,17 @@ class SettingsPanel(QWidget):
         self.reading_speed_spin.setValue(settings.reading_speed_wpm)
         self.confirm_delete_check.setChecked(settings.confirm_before_delete)
 
-        font_index = self.font_combo.findText(settings.editor_font_family)
-        if font_index >= 0:
-            self.font_combo.setCurrentIndex(font_index)
+        # Si la fuente guardada no está instalada (p. ej. el valor por
+        # defecto "Segoe UI" fuera de Windows), se añade a la lista en vez
+        # de dejar el combo en la primera fuente alfabética: así lo que se
+        # ve coincide con lo guardado y elegir cualquier fuente dispara
+        # siempre currentTextChanged.
+        family = settings.editor_font_family
+        font_index = self.font_combo.findText(family)
+        if font_index < 0:
+            self.font_combo.insertItem(0, family)
+            font_index = 0
+        self.font_combo.setCurrentIndex(font_index)
         self.font_size_spin.setValue(settings.editor_font_size)
         self._loading = False
 

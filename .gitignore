@@ -8,6 +8,7 @@ __pycache__/
 .Python
 build/
 dist/
+dist-onefile/
 downloads/
 eggs/
 .eggs/
