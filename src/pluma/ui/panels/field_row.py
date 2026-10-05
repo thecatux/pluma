@@ -5,8 +5,7 @@ from PySide6.QtWidgets import (QHBoxLayout, QVBoxLayout, QPushButton, QLineEdit,
                                 QPlainTextEdit, QFrame)
 from PySide6.QtCore import Qt, QSize
 
-import icons
-import theme
+from pluma.ui import icons, theme
 
 
 class FieldRow(QFrame):

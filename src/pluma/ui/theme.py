@@ -806,7 +806,7 @@ class ThemeController(QObject):
 
 
 def apply_theme(app) -> ThemeController:
-    import glass  # import local: glass importa theme
+    from pluma.ui import glass  # import local: glass importa theme
     glass.install(app)
     controller = ThemeController(app)
     controller.apply()

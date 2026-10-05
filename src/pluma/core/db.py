@@ -17,13 +17,14 @@ import os
 import sqlite3
 import time
 from contextlib import contextmanager
+from pathlib import Path
 from typing import Any, Optional
 
 # Directorio del propio programa (donde vive este archivo), no el
 # directorio de trabajo desde el que se lance Pluma. Así "/data" queda
 # siempre junto al ejecutable/código fuente, sea cual sea el sistema
 # operativo o desde dónde se inicie la aplicación.
-_PROGRAM_DIR = os.path.dirname(os.path.abspath(__file__))
+_PROGRAM_DIR = str(Path(__file__).resolve().parents[3])
 DEFAULT_DB_PATH = os.environ.get("PLUMA_DB_PATH", os.path.join(_PROGRAM_DIR, "data", "pluma.db"))
 
 # Campos habituales de una ficha de personaje. El usuario puede añadir

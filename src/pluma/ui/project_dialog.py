@@ -14,9 +14,7 @@ from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QListWidget,
 from PySide6.QtCore import Qt, QSize
 from PySide6.QtGui import QPainter
 
-import glass
-import icons
-import theme
+from pluma.ui import glass, icons, theme
 
 
 class ProjectDialog(QDialog):

@@ -43,9 +43,8 @@ from PySide6.QtGui import (QAction, QKeySequence, QFont, QTextCharFormat, QActio
                            QShortcut)
 from PySide6.QtCore import Qt, QSize, Signal
 
-import icons
-import theme
-from find_replace import FindReplaceBar
+from pluma.ui import icons, theme
+from pluma.ui.find_replace import FindReplaceBar
 
 
 @dataclass(frozen=True)

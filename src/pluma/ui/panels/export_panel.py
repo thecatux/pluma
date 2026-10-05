@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QFormLayout, Q
                                 QSizePolicy)
 from PySide6.QtCore import Qt
 
-from exporter import FORMATS, ExportError, export_chapters
+from pluma.core.exporter import FORMATS, ExportError, export_chapters
 
 _INVALID_FILE_NAME_CHARS = re.compile(r'[\\/:*?"<>|]')
 

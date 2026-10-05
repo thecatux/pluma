@@ -13,8 +13,8 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QFormLayout, QLabel,
                                 QFrame, QScrollArea, QSizePolicy)
 from PySide6.QtCore import Qt, QTimer
 
-from db import DEFAULT_GENRES
-from app_settings import settings, signals as settings_signals
+from pluma.core.app_settings import settings, signals as settings_signals
+from pluma.core.db import DEFAULT_GENRES
 
 
 class InfoPanel(QWidget):

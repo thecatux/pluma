@@ -15,11 +15,10 @@ from PySide6.QtWidgets import (QWidget, QHBoxLayout, QVBoxLayout, QListWidget,
                                 QStackedWidget)
 from PySide6.QtCore import Qt, QTimer
 
-import icons
-import theme
-from db import DEFAULT_CHARACTER_FIELDS
-from panels.field_row import FieldRow
-from app_settings import settings, signals as settings_signals
+from pluma.core.app_settings import settings, signals as settings_signals
+from pluma.core.db import DEFAULT_CHARACTER_FIELDS
+from pluma.ui import icons, theme
+from pluma.ui.panels.field_row import FieldRow
 
 
 class CharactersPanel(QWidget):

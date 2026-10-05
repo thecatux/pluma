@@ -19,9 +19,8 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, Q
 from PySide6.QtCore import Qt, QUrl, Signal
 from PySide6.QtGui import QColor, QFontDatabase, QDesktopServices
 
-import icons
-import theme
-from app_settings import settings
+from pluma.core.app_settings import settings
+from pluma.ui import icons, theme
 
 BACKUP_FILTER = "Base de datos SQLite (*.db)"
 

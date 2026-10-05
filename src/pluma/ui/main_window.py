@@ -13,20 +13,18 @@ from PySide6.QtWidgets import (QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
 from PySide6.QtCore import Qt, QSize, QTimer, QSettings
 from PySide6.QtGui import QFont, QAction, QKeySequence, QPainter, QTextCursor
 
-import glass
-import icons
-import theme
-from about_dialog import AboutDialog
-from db import Database
-from project_dialog import ProjectDialog
-from panels.info_panel import InfoPanel
-from panels.chapters_panel import ChaptersPanel
-from panels.characters_panel import CharactersPanel
-from panels.scenes_panel import ScenesPanel
-from panels.outline_panel import OutlinePanel
-from panels.notes_panel import NotesPanel
-from panels.export_panel import ExportPanel
-from panels.settings_panel import SettingsPanel
+from pluma.core.db import Database
+from pluma.ui import glass, icons, theme
+from pluma.ui.about_dialog import AboutDialog
+from pluma.ui.project_dialog import ProjectDialog
+from pluma.ui.panels.info_panel import InfoPanel
+from pluma.ui.panels.chapters_panel import ChaptersPanel
+from pluma.ui.panels.characters_panel import CharactersPanel
+from pluma.ui.panels.scenes_panel import ScenesPanel
+from pluma.ui.panels.outline_panel import OutlinePanel
+from pluma.ui.panels.notes_panel import NotesPanel
+from pluma.ui.panels.export_panel import ExportPanel
+from pluma.ui.panels.settings_panel import SettingsPanel
 
 SECTIONS = [
     ("info", "info", "Datos de la novela"),

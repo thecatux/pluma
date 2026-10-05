@@ -8,9 +8,9 @@ proyecto.
 
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QMessageBox
 
-import theme
-from outline_canvas import TimelineCanvas
-from app_settings import settings
+from pluma.core.app_settings import settings
+from pluma.ui import theme
+from pluma.ui.outline_canvas import TimelineCanvas
 
 
 class OutlinePanel(QWidget):

@@ -4,10 +4,8 @@ from PySide6.QtWidgets import QDialog, QHBoxLayout, QLabel, QPushButton, QVBoxLa
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QPainter
 
-import glass
-import icons
-import theme
-from build_info import APP_NAME, APP_VERSION, BUILD_DATE, BUILD_NUMBER
+from pluma.ui import glass, icons, theme
+from pluma.core.build_info import APP_NAME, APP_VERSION, BUILD_DATE, BUILD_NUMBER
 
 
 class AboutDialog(QDialog):

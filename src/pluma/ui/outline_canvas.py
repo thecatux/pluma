@@ -35,9 +35,8 @@ from PySide6.QtCore import (Qt, QTimer, Signal, QSize, QPointF, QPoint, QRectF,
 from PySide6.QtGui import (QPainter, QPainterPath, QPen, QColor, QIcon, QPixmap, QImage, QPolygonF,
                             QFont, QFontMetricsF, QPalette, QTextLayout, QTextOption)
 
-import icons
-import theme
-from app_settings import settings, signals as settings_signals
+from pluma.core.app_settings import settings, signals as settings_signals
+from pluma.ui import icons, theme
 
 
 

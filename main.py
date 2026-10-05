@@ -7,13 +7,16 @@ un proyecto y abre la ventana principal.
 """
 
 import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
 
 from PySide6.QtWidgets import QApplication
 
-from db import Database
-from project_dialog import ProjectDialog
-from main_window import MainWindow
-from theme import apply_theme
+from pluma.core.db import Database
+from pluma.ui.project_dialog import ProjectDialog
+from pluma.ui.main_window import MainWindow
+from pluma.ui.theme import apply_theme
 
 
 def main():

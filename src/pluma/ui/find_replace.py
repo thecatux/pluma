@@ -34,8 +34,7 @@ from PySide6.QtGui import QColor, QIcon, QTextCharFormat, QTextCursor
 from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QLineEdit, QPushButton,
                                 QTextEdit, QToolButton, QVBoxLayout, QWidget)
 
-import icons
-import theme
+from pluma.ui import icons, theme
 
 # ---------------------------------------------------------------------- #
 # Normalización (funciones puras)

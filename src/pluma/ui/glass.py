@@ -33,7 +33,7 @@ from PySide6.QtGui import (QPainter, QPainterPath, QColor, QLinearGradient,
 from PySide6.QtWidgets import (QWidget, QFrame, QGroupBox, QStyle,
                                QStyledItemDelegate)
 
-import theme
+from pluma.ui import theme
 
 
 # ---------------------------------------------------------------------- #

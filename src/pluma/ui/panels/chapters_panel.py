@@ -26,10 +26,9 @@ from PySide6.QtWidgets import (QWidget, QHBoxLayout, QVBoxLayout, QListWidget,
 from PySide6.QtCore import Qt, QTimer, QEvent, QSize
 from PySide6.QtGui import QKeySequence, QShortcut
 
-import icons
-import theme
-from editor_widget import RichTextEditor
-from app_settings import settings, signals as settings_signals
+from pluma.core.app_settings import settings, signals as settings_signals
+from pluma.ui import icons, theme
+from pluma.ui.editor_widget import RichTextEditor
 
 # Márgenes del área de escritura en modo normal y ancho ideal de la
 # columna de texto cuando está activo el modo enfoque.

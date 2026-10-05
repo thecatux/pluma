@@ -16,11 +16,10 @@ from PySide6.QtWidgets import (QWidget, QHBoxLayout, QVBoxLayout, QListWidget,
                                 QGroupBox, QStackedWidget, QLayout, QFrame, QSizePolicy)
 from PySide6.QtCore import Qt, QTimer, QRect, QPoint, QSize
 
-import icons
-import theme
-from db import DEFAULT_SCENE_FIELDS
-from panels.field_row import FieldRow
-from app_settings import settings, signals as settings_signals
+from pluma.core.app_settings import settings, signals as settings_signals
+from pluma.core.db import DEFAULT_SCENE_FIELDS
+from pluma.ui import icons, theme
+from pluma.ui.panels.field_row import FieldRow
 
 
 class FlowLayout(QLayout):

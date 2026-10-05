@@ -12,10 +12,9 @@ from PySide6.QtWidgets import (QWidget, QHBoxLayout, QVBoxLayout, QListWidget,
                                 QSplitter, QMessageBox, QStackedWidget, QFrame)
 from PySide6.QtCore import Qt, QTimer
 
-import icons
-import theme
-from editor_widget import RichTextEditor
-from app_settings import settings, signals as settings_signals
+from pluma.core.app_settings import settings, signals as settings_signals
+from pluma.ui import icons, theme
+from pluma.ui.editor_widget import RichTextEditor
 
 
 class NotesPanel(QWidget):
