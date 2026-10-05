@@ -87,7 +87,7 @@ class ProjectDialog(QDialog):
 
     def _refresh_icons(self):
         c = theme.colors()
-        self.title_icon.setPixmap(icons.pixmap("pen", c["primary_text"], size=20))
+        self.title_icon.setPixmap(icons.brand_pixmap(20))
         if hasattr(self, "empty_icon"):
             self.empty_icon.setPixmap(icons.pixmap("library", c["text_muted"], size=52))
 

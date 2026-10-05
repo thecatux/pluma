@@ -16,14 +16,15 @@ from PySide6.QtWidgets import QApplication
 from pluma.core.db import Database
 from pluma.ui.project_dialog import ProjectDialog
 from pluma.ui.main_window import MainWindow
-from pluma.ui.theme import apply_theme
+from pluma.ui import icons, theme
 
 
 def main():
     app = QApplication(sys.argv)
     app.setApplicationName("Pluma")
     app.setOrganizationName("Pluma")
-    theme_controller = apply_theme(app)
+    app.setWindowIcon(icons.application_icon())
+    theme_controller = theme.apply_theme(app)
 
     db = Database()
 

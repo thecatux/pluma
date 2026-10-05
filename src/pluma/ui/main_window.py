@@ -208,7 +208,7 @@ class MainWindow(QMainWindow):
 
     def _refresh_sidebar_icons(self, *_args):
         c = theme.colors()
-        self.app_icon_label.setPixmap(icons.pixmap("pen", c["primary_text"], size=20))
+        self.app_icon_label.setPixmap(icons.brand_pixmap(20))
         self.switch_project_button.setIcon(icons.icon("library", c["on_primary"], size=16))
         for row in range(self.sidebar.count()):
             item = self.sidebar.item(row)

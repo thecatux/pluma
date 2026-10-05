@@ -72,7 +72,7 @@ class AboutDialog(QDialog):
         layout.addLayout(row)
 
     def _refresh_icon(self):
-        self.app_icon.setPixmap(icons.pixmap("pen", theme.colors()["primary_text"], size=36))
+        self.app_icon.setPixmap(icons.brand_pixmap(36))
 
     def _on_theme_changed(self, *_args):
         self._refresh_icon()

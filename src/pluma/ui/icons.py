@@ -24,6 +24,8 @@ from PySide6.QtCore import QByteArray, Qt
 from PySide6.QtGui import QIcon, QPixmap, QPainter
 from PySide6.QtSvg import QSvgRenderer
 
+from pluma.core.resources import asset_path
+
 _SVG_WRAPPER = (
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" '
     'fill="none" stroke="{color}" stroke-width="{stroke_width}" '
@@ -202,3 +204,26 @@ def dual_icon(name: str, normal_color: str, selected_color: str, size: int = 20,
     result.addPixmap(pixmap(name, normal_color, size, stroke_width), QIcon.Normal, QIcon.Off)
     result.addPixmap(pixmap(name, selected_color, size, stroke_width), QIcon.Selected, QIcon.Off)
     return result
+
+
+def application_icon() -> QIcon:
+    """Build the app icon from all supplied Windows icon sizes."""
+    result = QIcon()
+    for size in (16, 24, 32, 48, 64, 128, 256):
+        result.addFile(str(asset_path(f"icon_{size}.ico")))
+    return result
+
+
+def brand_pixmap(size: int) -> QPixmap:
+    """Render the Pluma brand SVG at high density for in-app use."""
+    renderer = QSvgRenderer(str(asset_path("pluma.svg")))
+    if not renderer.isValid():
+        raise ValueError("Invalid Pluma brand SVG")
+    scale = 2
+    pm = QPixmap(size * scale, size * scale)
+    pm.fill(Qt.transparent)
+    painter = QPainter(pm)
+    renderer.render(painter)
+    painter.end()
+    pm.setDevicePixelRatio(scale)
+    return pm
