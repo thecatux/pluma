@@ -98,5 +98,8 @@ Desktop.ini
 *.swp
 *.swo
 *~
+
+# Archivos varios
 /data
 data/
+_build_stamp.py
