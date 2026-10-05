@@ -5,9 +5,18 @@ import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
+try:
+    # Módulo generado por `stamp_build.py` justo antes de compilar. Al ser
+    # un import estático, Nuitka lo incluye en el binario, de modo que el
+    # build y la fecha viajan dentro del ejecutable y no dependen de que
+    # exista git ni un repositorio en la máquina del usuario.
+    from . import _build_stamp
+except ImportError:
+    _build_stamp = None
+
 
 APP_NAME = "Pluma"
-APP_VERSION = "Beta 1"
+APP_VERSION = "0.9.1 (BETA 1)"
 
 
 def _git_value(*arguments):
@@ -26,6 +35,10 @@ def _build_number():
     if supplied_number:
         return supplied_number
 
+    stamped_number = getattr(_build_stamp, "BUILD_NUMBER", "")
+    if stamped_number:
+        return stamped_number
+
     try:
         commit_count = _git_value("rev-list", "--count", "HEAD")
         commit_hash = _git_value("rev-parse", "--short", "HEAD")
@@ -38,6 +51,10 @@ def _build_date():
     supplied_date = os.environ.get("PLUMA_BUILD_DATE")
     if supplied_date:
         return supplied_date
+
+    stamped_date = getattr(_build_stamp, "BUILD_DATE", "")
+    if stamped_date:
+        return stamped_date
 
     source_epoch = os.environ.get("SOURCE_DATE_EPOCH")
     if source_epoch:
