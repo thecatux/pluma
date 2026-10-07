@@ -19,7 +19,7 @@ pluma = "main:main"
 py-modules = ["main"]
 
 [tool.setuptools.data-files]
-assets = ["assets/*.ico", "assets/*.svg"]
+assets = ["assets/*.ico", "assets/*.svg", "assets/LICENSE.txt"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

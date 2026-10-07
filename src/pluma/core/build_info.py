@@ -16,7 +16,14 @@ except ImportError:
 
 
 APP_NAME = "Pluma"
-APP_VERSION = "0.9.1 (BETA 1)"
+APP_VERSION = "0.9.2 (BETA)"
+
+# Metadatos legales mostrados en "Acerca de".
+APP_AUTHOR = "Catux"
+APP_COPYRIGHT_YEAR = "2026"
+APP_LICENSE_NAME = "GNU General Public License v3.0"
+APP_LICENSE_URL = "https://www.gnu.org/licenses/gpl-3.0.html"
+APP_SOURCE_URL = ""
 
 
 def _git_value(*arguments):
