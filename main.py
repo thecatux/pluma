@@ -11,15 +11,21 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
 
-from PySide6.QtWidgets import QApplication
+from pluma.core.error_logging import configure_error_logging, install_qt_message_handler
 
-from pluma.core.db import Database
-from pluma.ui.project_dialog import ProjectDialog
-from pluma.ui.main_window import MainWindow
-from pluma.ui import icons, theme
+configure_error_logging()
 
 
 def main():
+    from PySide6.QtWidgets import QApplication
+
+    from pluma.core.db import Database
+    from pluma.ui import icons, theme
+    from pluma.ui.main_window import MainWindow
+    from pluma.ui.project_dialog import ProjectDialog
+
+    install_qt_message_handler()
+
     app = QApplication(sys.argv)
     app.setApplicationName("Pluma")
     app.setOrganizationName("Pluma")

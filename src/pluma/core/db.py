@@ -15,56 +15,18 @@ permite probarla o reutilizarla sin levantar una interfaz gráfica.
 import json
 import os
 import sqlite3
-import sys
 import time
 from contextlib import contextmanager
-from pathlib import Path
 from typing import Any, Optional
 
-def _program_dir() -> str:
-    """Directorio base de la aplicación, válido tanto en desarrollo como
-    una vez compilada a binario.
-
-    En un binario (PyInstaller, cx_Freeze, Nuitka...) `__file__` apunta a
-    un directorio interno o temporal (p. ej. `_MEIPASS` en modo onefile),
-    y subir `parents[3]` desde ahí no lleva a ningún sitio útil: los
-    datos se perderían en cada arranque o la ruta ni siquiera existiría.
-    Por eso, al estar compilado, se usa la ubicación real del ejecutable.
-    """
-    # Nuitka: `__compiled__` existe como global del módulo; en onefile,
-    # `containing_dir` es la carpeta del ejecutable original (no la
-    # carpeta temporal de extracción).
-    compiled = globals().get("__compiled__")
-    if compiled is not None:
-        containing = getattr(compiled, "containing_dir", None)
-        if containing:
-            return os.path.abspath(containing)
-        return os.path.dirname(os.path.abspath(sys.argv[0]))
-    # PyInstaller / cx_Freeze / py2exe: `sys.executable` es el propio
-    # binario (también en onefile de PyInstaller).
-    if getattr(sys, "frozen", False):
-        return os.path.dirname(os.path.abspath(sys.executable))
-    # Ejecución desde el código fuente: raíz del repositorio.
-    return str(Path(__file__).resolve().parents[3])
-
-
-def _user_data_dir() -> str:
-    """Carpeta de datos por usuario, usada solo si el directorio del
-    programa no admite escritura (p. ej. instalado en Program Files)."""
-    if sys.platform == "win32":
-        base = os.environ.get("APPDATA") or os.path.expanduser("~")
-    elif sys.platform == "darwin":
-        base = os.path.expanduser("~/Library/Application Support")
-    else:
-        base = os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share")
-    return os.path.join(base, "Pluma")
+from pluma.core.paths import program_dir, user_data_dir
 
 
 def _default_db_path() -> str:
     env_path = os.environ.get("PLUMA_DB_PATH")
     if env_path:
         return env_path
-    data_dir = os.path.join(_program_dir(), "data")
+    data_dir = os.path.join(program_dir(), "data")
     try:
         os.makedirs(data_dir, exist_ok=True)
         if os.access(data_dir, os.W_OK):
@@ -73,10 +35,10 @@ def _default_db_path() -> str:
         pass
     # El directorio junto al ejecutable es de solo lectura: se usa la
     # carpeta de datos del usuario en lugar de fallar al abrir la base.
-    return os.path.join(_user_data_dir(), "pluma.db")
+    return os.path.join(user_data_dir(), "pluma.db")
 
 
-_PROGRAM_DIR = _program_dir()
+_PROGRAM_DIR = program_dir()
 DEFAULT_DB_PATH = _default_db_path()
 
 # Campos habituales de una ficha de personaje. El usuario puede añadir
