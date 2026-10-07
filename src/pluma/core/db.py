@@ -583,6 +583,9 @@ class Database:
         with self._tx() as cur:
             cur.execute("DELETE FROM character_fields WHERE id = ?", (field_id,))
 
+    def reorder_character_fields(self, character_id: int, ordered_ids: list[int]):
+        self._reorder_rows("character_fields", "character_id", character_id, ordered_ids)
+
     # ------------------------------------------------------------------ #
     # Escenas (ficha flexible + enlace con capítulos)
     # ------------------------------------------------------------------ #
@@ -658,6 +661,9 @@ class Database:
     def delete_scene_field(self, field_id: int):
         with self._tx() as cur:
             cur.execute("DELETE FROM scene_fields WHERE id = ?", (field_id,))
+
+    def reorder_scene_fields(self, scene_id: int, ordered_ids: list[int]):
+        self._reorder_rows("scene_fields", "scene_id", scene_id, ordered_ids)
 
     def get_scene_chapter_links(self, scene_id: int) -> list[int]:
         cur = self._conn.execute(
@@ -788,3 +794,13 @@ class Database:
         values = list(fields.values()) + [row_id]
         with self._tx() as cur:
             cur.execute(f"UPDATE {table} SET {columns} WHERE id = ?", values)
+
+    def _reorder_rows(self, table: str, parent_column: str, parent_id: int, ordered_ids: list[int]):
+        """Reescribe `order_index` de las filas hijas de `parent_id` según
+        el orden recibido."""
+        with self._tx() as cur:
+            for index, row_id in enumerate(ordered_ids):
+                cur.execute(
+                    f"UPDATE {table} SET order_index = ? WHERE id = ? AND {parent_column} = ?",
+                    (index, row_id, parent_id),
+                )

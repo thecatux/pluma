@@ -19,7 +19,7 @@ from PySide6.QtCore import Qt, QTimer, QRect, QPoint, QSize
 from pluma.core.app_settings import settings, signals as settings_signals
 from pluma.core.db import DEFAULT_SCENE_FIELDS
 from pluma.ui import icons, theme
-from pluma.ui.panels.field_row import FieldRow
+from pluma.ui.panels.field_row import FieldList, FieldRow
 
 
 class FlowLayout(QLayout):
@@ -117,7 +117,6 @@ class ScenesPanel(QWidget):
         self.project_id = None
         self._current_scene_id = None
         self._loading = False
-        self._field_rows: list[FieldRow] = []
 
         self._save_timer = QTimer(self)
         self._save_timer.setSingleShot(True)
@@ -244,15 +243,9 @@ class ScenesPanel(QWidget):
 
         right_layout.addWidget(chapters_box)
 
-        self.scroll_area = QScrollArea()
-        self.scroll_area.setWidgetResizable(True)
-        self.fields_container = QWidget()
-        self.fields_layout = QVBoxLayout(self.fields_container)
-        self.fields_layout.setContentsMargins(2, 2, 10, 2)
-        self.fields_layout.setSpacing(6)
-        self.fields_layout.addStretch(1)
-        self.scroll_area.setWidget(self.fields_container)
-        right_layout.addWidget(self.scroll_area, 1)
+        self.fields = FieldList()
+        self.fields.reordered.connect(self._on_fields_reordered)
+        right_layout.addWidget(self.fields, 1)
 
         self.add_field_button = QPushButton("+ Añadir aspecto")
         self.add_field_button.clicked.connect(self.add_custom_field)
@@ -372,14 +365,11 @@ class ScenesPanel(QWidget):
         self.remove_button.setEnabled(False)
 
     def _clear_fields(self):
-        for row in self._field_rows:
-            row.setParent(None)
-        self._field_rows = []
+        self.fields.clear()
 
     def _add_field_row(self, field_id, field_name, field_value):
         row = FieldRow(field_id, field_name, field_value, self._on_field_changed, self._on_field_delete)
-        self.fields_layout.insertWidget(self.fields_layout.count() - 1, row)
-        self._field_rows.append(row)
+        self.fields.add_row(row)
         return row
 
     # ------------------------------------------------------------------ #
@@ -406,10 +396,11 @@ class ScenesPanel(QWidget):
     def _on_field_delete(self, row: FieldRow):
         if row.field_id is not None:
             self.db.delete_scene_field(row.field_id)
-        self.fields_layout.removeWidget(row)
-        row.setParent(None)
-        if row in self._field_rows:
-            self._field_rows.remove(row)
+        self.fields.remove_row(row)
+
+    def _on_fields_reordered(self, ordered_ids):
+        if self._current_scene_id is not None:
+            self.db.reorder_scene_fields(self._current_scene_id, ordered_ids)
 
     def _schedule_save(self):
         if self._loading or self._current_scene_id is None:
@@ -420,7 +411,7 @@ class ScenesPanel(QWidget):
         if self._current_scene_id is None:
             return
         self.db.update_scene(self._current_scene_id, title=self.title_edit.text().strip() or "Sin título")
-        for row in self._field_rows:
+        for row in self.fields.rows():
             self.db.update_scene_field(row.field_id, field_name=row.field_name(), field_value=row.field_value())
 
     def _flush_pending_save(self):

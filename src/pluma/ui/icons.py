@@ -117,6 +117,11 @@ _ICON_BODIES = {
         '<polyline points="3,16 3,21 8,21"/><polyline points="21,16 21,21 16,21"/>'
     ),
 
+    "grip": "".join(
+        f'<circle cx="{x}" cy="{y}" r="1.4" fill="{{color}}" stroke="none"/>'
+        for x in (9, 15) for y in (6, 12, 18)
+    ),
+
     # -- Línea temporal (lienzo) ------------------------------------------ #
     "plus": '<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>',
     "minus": '<line x1="5" y1="12" x2="19" y2="12"/>',

@@ -1,11 +1,42 @@
-"""Tarjeta de campo (nombre + valor + borrar) compartida por los paneles
-"Personajes" y "Escenas"."""
+"""Tarjeta de campo (nombre + valor + borrar) y lista reordenable de
+tarjetas, compartidas por los paneles "Personajes" y "Escenas"."""
 
-from PySide6.QtWidgets import (QHBoxLayout, QVBoxLayout, QPushButton, QLineEdit,
-                                QPlainTextEdit, QFrame)
-from PySide6.QtCore import Qt, QSize
+from PySide6.QtWidgets import (QApplication, QHBoxLayout, QVBoxLayout, QPushButton,
+                                QLineEdit, QPlainTextEdit, QFrame, QLabel,
+                                QScrollArea, QWidget)
+from PySide6.QtCore import Qt, QSize, QMimeData, Signal
+from PySide6.QtGui import QDrag
 
 from pluma.ui import icons, theme
+
+
+class _DragHandle(QLabel):
+    """Tirador desde el que se arrastra una tarjeta para reordenarla."""
+
+    def __init__(self, row):
+        super().__init__(row)
+        self.row = row
+        self._press_pos = None
+        self.setCursor(Qt.SizeAllCursor)
+        self.setToolTip("Arrastra para reordenar")
+
+    def mousePressEvent(self, event):
+        self._press_pos = event.position().toPoint()
+
+    def mouseMoveEvent(self, event):
+        if self._press_pos is None or not event.buttons() & Qt.LeftButton:
+            return
+        distance = (event.position().toPoint() - self._press_pos).manhattanLength()
+        if distance >= QApplication.startDragDistance():
+            self._start_drag()
+
+    def _start_drag(self):
+        drag = QDrag(self)
+        drag.setMimeData(QMimeData())
+        drag.setPixmap(self.row.grab())
+        drag.setHotSpot(self.mapTo(self.row, self._press_pos))
+        self._press_pos = None
+        drag.exec(Qt.MoveAction)
 
 
 class FieldRow(QFrame):
@@ -25,6 +56,7 @@ class FieldRow(QFrame):
         super().__init__(parent)
         self.field_id = field_id
         self._on_change = on_change
+        self._on_delete = on_delete
         self.setProperty("role", "field-row")
 
         layout = QVBoxLayout(self)
@@ -33,8 +65,14 @@ class FieldRow(QFrame):
 
         header = QHBoxLayout()
         header.setSpacing(4)
+        self.drag_handle = _DragHandle(self)
+        header.addWidget(self.drag_handle)
         self.name_edit = QLineEdit(field_name)
         self.name_edit.textEdited.connect(self._changed)
+        # Un hijo que rechaza un arrastro no lo deja subir al padre, así que
+        # los campos de texto no deben aceptar drops para que `FieldList`
+        # reciba el de la tarjeta aunque se suelte encima de ellos.
+        self.name_edit.setAcceptDrops(False)
         header.addWidget(self.name_edit, 1)
 
         self.delete_btn = QPushButton()
@@ -42,7 +80,7 @@ class FieldRow(QFrame):
         self.delete_btn.setFixedSize(20, 20)
         self.delete_btn.setIconSize(QSize(13, 13))
         self.delete_btn.setToolTip("Eliminar este campo")
-        self.delete_btn.clicked.connect(lambda: on_delete(self))
+        self.delete_btn.clicked.connect(self._delete)
         header.addWidget(self.delete_btn)
         layout.addLayout(header)
 
@@ -50,6 +88,7 @@ class FieldRow(QFrame):
         self.value_edit.setPlaceholderText("Sin completar todavía…")
         self.value_edit.setStyleSheet("background: transparent; border: none; padding: 0;")
         self.value_edit.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.value_edit.setAcceptDrops(False)
         # Se emite al cambiar el texto y también al cambiar el ancho
         # (el reajuste de líneas), así que sustituye a `resizeEvent`.
         self.value_edit.document().documentLayout().documentSizeChanged.connect(self._autosize)
@@ -68,6 +107,7 @@ class FieldRow(QFrame):
             f"color: {c['text_secondary']};"
         )
         self.delete_btn.setIcon(icons.icon("x", c["text_muted"], size=13))
+        self.drag_handle.setPixmap(icons.pixmap("grip", c["text_muted"], size=14))
 
     def _height_for_lines(self, lines: float) -> int:
         document = self.value_edit.document()
@@ -88,8 +128,122 @@ class FieldRow(QFrame):
     def _changed(self, *_args):
         self._on_change(self)
 
+    def _delete(self):
+        self._on_delete(self)
+
     def field_name(self) -> str:
         return self.name_edit.text().strip() or "Campo"
 
     def field_value(self) -> str:
         return self.value_edit.toPlainText()
+
+
+class FieldList(QScrollArea):
+    """Lista vertical de `FieldRow` con scroll. Las tarjetas se reordenan
+    arrastrándolas por su tirador; al soltar se emite `reordered` con los
+    `field_id` en el nuevo orden."""
+
+    reordered = Signal(list)
+
+    AUTOSCROLL_MARGIN = 28
+    AUTOSCROLL_STEP = 14
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._rows: list[FieldRow] = []
+        self.setWidgetResizable(True)
+        self.setAcceptDrops(True)
+
+        container = QWidget()
+        self._layout = QVBoxLayout(container)
+        self._layout.setContentsMargins(2, 2, 10, 2)
+        self._layout.setSpacing(6)
+        self._layout.addStretch(1)
+        self.setWidget(container)
+
+        self._indicator = QFrame(container)
+        self._indicator.setFixedHeight(2)
+        self._indicator.hide()
+
+    def rows(self) -> list[FieldRow]:
+        return list(self._rows)
+
+    def add_row(self, row: FieldRow):
+        self._layout.insertWidget(len(self._rows), row)
+        self._rows.append(row)
+
+    def remove_row(self, row: FieldRow):
+        self._layout.removeWidget(row)
+        row.setParent(None)
+        self._rows.remove(row)
+
+    def clear(self):
+        for row in self.rows():
+            self.remove_row(row)
+
+    # ------------------------------------------------------------------ #
+    # Arrastrar y soltar
+    # ------------------------------------------------------------------ #
+    def _dragged_row(self, event):
+        source = event.source()
+        if isinstance(source, _DragHandle) and source.row in self._rows:
+            return source.row
+        return None
+
+    def _drop_index(self, event) -> int:
+        point = self.widget().mapFrom(self.viewport(), event.position().toPoint())
+        for index, row in enumerate(self._rows):
+            if point.y() < row.geometry().center().y():
+                return index
+        return len(self._rows)
+
+    def dragEnterEvent(self, event):
+        if self._dragged_row(event) is not None:
+            event.acceptProposedAction()
+
+    def dragMoveEvent(self, event):
+        if self._dragged_row(event) is None:
+            return
+        event.acceptProposedAction()
+        self._autoscroll(event.position().toPoint().y())
+        self._show_indicator(self._drop_index(event))
+
+    def dragLeaveEvent(self, event):
+        self._indicator.hide()
+
+    def dropEvent(self, event):
+        row = self._dragged_row(event)
+        self._indicator.hide()
+        if row is None:
+            return
+        event.acceptProposedAction()
+        self._move_row(row, self._drop_index(event))
+
+    def _move_row(self, row: FieldRow, index: int):
+        old = self._rows.index(row)
+        new = index - 1 if index > old else index
+        if new == old:
+            return
+        self._rows.insert(new, self._rows.pop(old))
+        self._layout.removeWidget(row)
+        self._layout.insertWidget(new, row)
+        self.reordered.emit([r.field_id for r in self._rows])
+
+    def _show_indicator(self, index: int):
+        spacing = self._layout.spacing()
+        if index < len(self._rows):
+            y = self._rows[index].geometry().top() - spacing // 2
+        else:
+            y = self._rows[-1].geometry().bottom() + spacing // 2
+        ref = self._rows[0].geometry()
+        self._indicator.setStyleSheet(f"background: {theme.colors()['text_secondary']};")
+        self._indicator.setGeometry(ref.x(), y - 1, ref.width(), 2)
+        self._indicator.raise_()
+        self._indicator.show()
+
+    def _autoscroll(self, y: int):
+        bar = self.verticalScrollBar()
+        if y < self.AUTOSCROLL_MARGIN:
+            bar.setValue(bar.value() - self.AUTOSCROLL_STEP)
+        elif y > self.viewport().height() - self.AUTOSCROLL_MARGIN:
+            bar.setValue(bar.value() + self.AUTOSCROLL_STEP)
