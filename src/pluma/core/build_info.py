@@ -16,7 +16,7 @@ except ImportError:
 
 
 APP_NAME = "Pluma"
-APP_VERSION = "0.9.2 (BETA)"
+APP_VERSION = "0.10.0 (BETA)"
 
 # Metadatos legales mostrados en "Acerca de".
 APP_AUTHOR = "Catux"
