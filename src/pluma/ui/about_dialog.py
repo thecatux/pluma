@@ -23,7 +23,7 @@ from pluma.core.build_info import (
     APP_AUTHOR, APP_COPYRIGHT_YEAR, APP_LICENSE_NAME, APP_LICENSE_URL,
     APP_NAME, APP_SOURCE_URL, APP_VERSION, BUILD_DATE, BUILD_NUMBER,
 )
-from pluma.ui import glass, icons, theme
+from pluma.ui import icons, theme
 
 TAGLINE = "Escribir es un arte"
 
@@ -305,5 +305,5 @@ class AboutDialog(QDialog):
         super().paintEvent(event)
         painter = QPainter(self)
         painter.setClipRect(event.rect())
-        glass.paint_backdrop(painter, self.rect())
+        theme.paint_backdrop(painter, self.rect())
         painter.end()

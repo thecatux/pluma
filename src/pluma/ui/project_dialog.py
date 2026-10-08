@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QListWidget,
 from PySide6.QtCore import Qt, QSize
 from PySide6.QtGui import QPainter
 
-from pluma.ui import glass, icons, theme
+from pluma.ui import icons, theme
 
 
 class ProjectDialog(QDialog):
@@ -82,7 +82,7 @@ class ProjectDialog(QDialog):
         super().paintEvent(event)
         painter = QPainter(self)
         painter.setClipRect(event.rect())
-        glass.paint_backdrop(painter, self.rect())
+        theme.paint_backdrop(painter, self.rect())
         painter.end()
 
     def _refresh_icons(self):

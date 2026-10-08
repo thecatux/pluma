@@ -169,7 +169,16 @@ class SettingsPanel(QWidget):
             self.theme_combo.addItem(theme.MODE_LABELS["light"], "light")
             self.theme_combo.addItem(theme.MODE_LABELS["dark"], "dark")
             self.theme_combo.currentIndexChanged.connect(self._on_theme_changed)
-            form.addRow("Tema", self.theme_combo)
+            form.addRow("Modo de color", self.theme_combo)
+
+            self.visual_theme_combo = QComboBox()
+            self.visual_theme_combo.setMinimumHeight(30)
+            for name, definition in theme.THEMES.items():
+                self.visual_theme_combo.addItem(definition.label, name)
+            self.visual_theme_combo.currentIndexChanged.connect(
+                self._on_visual_theme_changed
+            )
+            form.addRow("Estilo visual", self.visual_theme_combo)
 
             accent_row = QHBoxLayout()
             accent_row.setSpacing(8)
@@ -320,6 +329,8 @@ class SettingsPanel(QWidget):
         if self.theme_controller is not None:
             index = self.theme_combo.findData(self.theme_controller.mode)
             self.theme_combo.setCurrentIndex(index if index >= 0 else 0)
+            index = self.visual_theme_combo.findData(self.theme_controller.theme_name)
+            self.visual_theme_combo.setCurrentIndex(index if index >= 0 else 0)
 
         self.autosave_slider.setValue(settings.autosave_interval_ms)
         self._update_autosave_label(settings.autosave_interval_ms)
@@ -347,6 +358,11 @@ class SettingsPanel(QWidget):
         if self._loading or self.theme_controller is None:
             return
         self.theme_controller.set_mode(self.theme_combo.currentData())
+
+    def _on_visual_theme_changed(self, _index):
+        if self._loading or self.theme_controller is None:
+            return
+        self.theme_controller.set_theme(self.visual_theme_combo.currentData())
 
     def _choose_accent_color(self):
         current = QColor(self.theme_controller.accent_color)

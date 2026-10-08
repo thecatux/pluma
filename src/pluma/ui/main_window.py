@@ -14,7 +14,7 @@ from PySide6.QtCore import Qt, QSize, QTimer, QSettings
 from PySide6.QtGui import QFont, QAction, QKeySequence, QPainter, QTextCursor
 
 from pluma.core.db import Database
-from pluma.ui import glass, icons, theme
+from pluma.ui import icons, theme
 from pluma.ui.about_dialog import AboutDialog
 from pluma.ui.project_dialog import ProjectDialog
 from pluma.ui.panels.info_panel import InfoPanel
@@ -39,8 +39,8 @@ SECTIONS = [
 
 # Modos de la barra lateral, en el orden en que los recorre el botón.
 SIDEBAR_MODES = ("full", "icons", "hidden")
-# Anchos del cristal en sí; el contenedor suma el margen de la sombra
-# (`glass.GlassPanel.inset`) a cada lado.
+# Anchos del panel en sí; el contenedor suma el margen de la sombra
+# (`theme.Panel.inset`) a cada lado.
 SIDEBAR_WIDTHS = {"full": 212, "icons": 66}
 # En modo solo iconos el logo se centra en el ancho reducido.
 SIDEBAR_HEADER_MARGINS = {"full": (20, 22, 20, 18), "icons": (23, 22, 23, 18)}
@@ -107,11 +107,11 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
-        # Panel flotante de cristal líquido: sombra, relleno translúcido,
-        # reflejos y esquinas redondeadas se pintan en `glass.GlassPanel`.
+        # Panel flotante: sombra, relleno y esquinas redondeadas los pinta
+        # `theme.Panel` según el tema activo.
         # Deja `inset` px alrededor para la sombra, y el layout interior
         # usa ese mismo margen.
-        self.sidebar_container = glass.GlassPanel(radius=24, inset=12)
+        self.sidebar_container = theme.Panel(radius=24, inset=12)
         self.sidebar_container.setObjectName("SidebarContainer")
         inset = self.sidebar_container.inset
         sidebar_layout = QVBoxLayout(self.sidebar_container)
@@ -151,7 +151,7 @@ class MainWindow(QMainWindow):
         font.setPointSize(11)
         self.sidebar.setFont(font)
         # Pastilla de cristal para el elemento activo / bajo el cursor.
-        self.sidebar.setItemDelegate(glass.SidebarItemDelegate(self.sidebar))
+        self.sidebar.setItemDelegate(theme.SidebarItemDelegate(self.sidebar))
         self.sidebar.setMouseTracking(True)
         sidebar_layout.addWidget(self.sidebar, 1)
 
@@ -315,12 +315,11 @@ class MainWindow(QMainWindow):
 
     # ------------------------------------------------------------------ #
     def paintEvent(self, event):
-        # Primero el degradado del QSS y encima las manchas de color que
-        # el cristal "refracta" (ver `glass.paint_backdrop`).
+        # Primero el degradado del QSS y encima el fondo del tema activo.
         super().paintEvent(event)
         painter = QPainter(self)
         painter.setClipRect(event.rect())
-        glass.paint_backdrop(painter, self.rect())
+        theme.paint_backdrop(painter, self.rect())
         painter.end()
 
     def _on_section_changed(self, row: int):
