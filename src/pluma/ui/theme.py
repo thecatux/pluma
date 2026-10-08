@@ -427,7 +427,7 @@ def build_stylesheet(palette: dict, font: str = FONT_FAMILY) -> str:
     QPushButton {{
         background: {c['button_glass']};
         border: 1px solid {c['border_strong']};
-        border-top-color: {c['rim_top']};
+        border-top-color: {c.get('button_rim_top', c['rim_top'])};
         border-radius: {r['button']}px;
         padding: 7px 14px;
         color: {c['text']};

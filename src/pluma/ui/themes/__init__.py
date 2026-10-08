@@ -38,7 +38,7 @@ en el log. Notas:
     deben ser alias).
 """
 
-from . import crystal, material
+from . import crystal, marfil, material, tinta
 
 # Orden de registro. El nombre del tema es el nombre del módulo.
-MODULES = (material, crystal)
+MODULES = (material, crystal, marfil, tinta)
