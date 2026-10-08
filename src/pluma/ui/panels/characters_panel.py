@@ -22,7 +22,10 @@ from pluma.ui.panels.field_row import FieldList, FieldRow
 
 
 class CharactersPanel(QWidget):
+    """Panel para crear, ordenar y editar las fichas de personajes."""
+
     def __init__(self, db, parent=None):
+        """Construye la lista de personajes y el formulario de edición."""
         super().__init__(parent)
         self.db = db
         self.project_id = None
@@ -49,13 +52,16 @@ class CharactersPanel(QWidget):
         theme.signals.changed.connect(self._apply_empty_state_theme)
 
     def _apply_settings(self):
+        """Actualiza el retardo del autoguardado según los ajustes actuales."""
         self._save_timer.setInterval(settings.autosave_interval_ms)
 
     def _apply_empty_state_theme(self, *_args):
+        """Actualiza el icono del estado vacío con el color del tema activo."""
         self.empty_icon_label.setPixmap(icons.pixmap("user", theme.colors()["text_muted"], size=52))
 
     # ------------------------------------------------------------------ #
     def _build_list_column(self) -> QWidget:
+        """Construye la lista ordenable y sus acciones de gestión."""
         left = QWidget()
         left_layout = QVBoxLayout(left)
         left_layout.setContentsMargins(14, 16, 10, 14)
@@ -91,12 +97,14 @@ class CharactersPanel(QWidget):
         return left
 
     def _build_detail_column(self) -> QWidget:
+        """Apila el estado vacío y el formulario de personaje."""
         self.right_stack = QStackedWidget()
         self.right_stack.addWidget(self._build_empty_state_widget())
         self.right_stack.addWidget(self._build_form_widget())
         return self.right_stack
 
     def _build_empty_state_widget(self) -> QWidget:
+        """Construye la vista mostrada cuando no hay personajes."""
         empty = QWidget()
         layout = QVBoxLayout(empty)
         layout.addStretch(1)
@@ -125,6 +133,7 @@ class CharactersPanel(QWidget):
         return empty
 
     def _build_form_widget(self) -> QWidget:
+        """Construye el editor del nombre y los campos del personaje."""
         right = QWidget()
         right_layout = QVBoxLayout(right)
         right_layout.setContentsMargins(24, 22, 24, 16)
@@ -156,12 +165,14 @@ class CharactersPanel(QWidget):
 
     # ------------------------------------------------------------------ #
     def load_project(self, project_id: int):
+        """Carga los personajes del proyecto y guarda cambios pendientes."""
         self._flush_pending_save()
         self.project_id = project_id
         self._current_character_id = None
         self._reload_list()
 
     def _reload_list(self, select_id=None):
+        """Recarga la lista y conserva la selección indicada si existe."""
         self._loading = True
         self.list_widget.clear()
         characters = self.db.list_characters(self.project_id) if self.project_id else []
@@ -183,6 +194,7 @@ class CharactersPanel(QWidget):
             self._show_empty_state()
 
     def _on_selection_changed(self, current, previous):
+        """Guarda la ficha actual y carga la selección nueva."""
         if self._loading:
             return
         self._flush_pending_save()
@@ -194,6 +206,7 @@ class CharactersPanel(QWidget):
         self._load_character(current.data(Qt.UserRole))
 
     def _on_rows_moved(self, *_args):
+        """Persiste el orden de personajes después de arrastrarlos."""
         if self._loading or self.project_id is None:
             return
         ordered_ids = [
@@ -204,6 +217,7 @@ class CharactersPanel(QWidget):
         self._reload_list(select_id=self._current_character_id)
 
     def _load_character(self, character_id: int):
+        """Carga el nombre y los campos guardados de un personaje."""
         row = self.db.get_character(character_id)
         if row is None:
             return
@@ -219,17 +233,21 @@ class CharactersPanel(QWidget):
         self.remove_button.setEnabled(True)
 
     def _update_avatar(self, name: str):
+        """Muestra la inicial del nombre en el avatar del formulario."""
         initial = (name or "?").strip()[:1].upper() or "?"
         self.avatar_label.setText(initial)
 
     def _show_empty_state(self):
+        """Muestra el estado vacío y deshabilita la acción de eliminar."""
         self.right_stack.setCurrentIndex(0)
         self.remove_button.setEnabled(False)
 
     def _clear_fields(self):
+        """Elimina del formulario las filas de campos actuales."""
         self.fields.clear()
 
     def _add_field_row(self, field_id, field_name, field_value):
+        """Crea una fila de campo y la añade al formulario."""
         row = FieldRow(field_id, field_name, field_value, self._on_field_changed, self._on_field_delete)
         self.fields.add_row(row)
         return row
@@ -238,6 +256,7 @@ class CharactersPanel(QWidget):
     # Autoguardado
     # ------------------------------------------------------------------ #
     def _on_name_edited(self, text):
+        """Sincroniza la lista y el avatar, y programa el guardado del nombre."""
         if self._current_character_id is None:
             return
         current_item = self.list_widget.currentItem()
@@ -247,23 +266,28 @@ class CharactersPanel(QWidget):
         self._schedule_save()
 
     def _on_field_changed(self, row: FieldRow):
+        """Programa el guardado tras editar un campo."""
         self._schedule_save()
 
     def _on_field_delete(self, row: FieldRow):
+        """Elimina de la base de datos y del formulario el campo indicado."""
         if row.field_id is not None:
             self.db.delete_character_field(row.field_id)
         self.fields.remove_row(row)
 
     def _on_fields_reordered(self, ordered_ids):
+        """Persiste el nuevo orden de los campos del personaje."""
         if self._current_character_id is not None:
             self.db.reorder_character_fields(self._current_character_id, ordered_ids)
 
     def _schedule_save(self):
+        """Reinicia el temporizador de autoguardado si hay una ficha activa."""
         if self._loading or self._current_character_id is None:
             return
         self._save_timer.start()
 
     def _save_fields(self):
+        """Guarda el nombre y los valores de todos los campos actuales."""
         if self._current_character_id is None:
             return
         self.db.update_character(self._current_character_id, name=self.name_edit.text().strip() or "Sin nombre")
@@ -271,6 +295,7 @@ class CharactersPanel(QWidget):
             self.db.update_character_field(row.field_id, field_name=row.field_name(), field_value=row.field_value())
 
     def _flush_pending_save(self):
+        """Ejecuta de inmediato el guardado pendiente, si lo hay."""
         if self._save_timer.isActive():
             self._save_timer.stop()
             self._save_fields()
@@ -279,6 +304,7 @@ class CharactersPanel(QWidget):
     # Acciones
     # ------------------------------------------------------------------ #
     def add_character(self):
+        """Crea un personaje y enfoca el campo para editar su nombre."""
         if self.project_id is None:
             return
         self._flush_pending_save()
@@ -288,6 +314,7 @@ class CharactersPanel(QWidget):
         self.name_edit.selectAll()
 
     def remove_current_character(self):
+        """Elimina el personaje seleccionado, con confirmación si está configurada."""
         if self._current_character_id is None:
             return
         if settings.confirm_before_delete:
@@ -302,6 +329,7 @@ class CharactersPanel(QWidget):
         self._reload_list()
 
     def add_custom_field(self):
+        """Solicita un nombre y añade un campo personalizado a la ficha."""
         if self._current_character_id is None:
             return
         name, ok = QInputDialog.getText(self, "Nuevo campo", "Nombre del campo:")

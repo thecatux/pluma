@@ -1,4 +1,4 @@
-"""Application error logging for Python and Qt exceptions."""
+"""Registro de errores y excepciones no controladas de Python y Qt en archivo de log."""
 
 import logging
 import sys
@@ -9,6 +9,7 @@ from pluma.core.paths import program_dir, user_data_dir
 
 
 def _log_unhandled_exception(exc_type, exc_value, exc_traceback):
+    """Registra una excepción no capturada en el archivo de log."""
     if issubclass(exc_type, (KeyboardInterrupt, SystemExit)):
         sys.__excepthook__(exc_type, exc_value, exc_traceback)
         return
@@ -18,10 +19,12 @@ def _log_unhandled_exception(exc_type, exc_value, exc_traceback):
 
 
 def _log_thread_exception(args):
+    """Registra una excepción no capturada originada en un hilo secundario."""
     _log_unhandled_exception(args.exc_type, args.exc_value, args.exc_traceback)
 
 
 def configure_error_logging():
+    """Configura el sistema de logging para escribir en pluma.log e instala hooks globales."""
     log_handler = None
     for log_dir in (Path(program_dir()) / "data", Path(user_data_dir())):
         try:
@@ -46,6 +49,7 @@ def configure_error_logging():
 
 
 def install_qt_message_handler():
+    """Instala un manejador de mensajes de Qt para redirigir avisos críticos y fatales al log."""
     from PySide6.QtCore import QtMsgType, qInstallMessageHandler
 
     def log_qt_message(message_type, context, message):

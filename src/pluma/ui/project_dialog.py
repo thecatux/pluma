@@ -18,7 +18,10 @@ from pluma.ui import icons, theme
 
 
 class ProjectDialog(QDialog):
+    """Diálogo modal para listar, crear, renombrar, eliminar y seleccionar proyectos."""
+
     def __init__(self, db, parent=None):
+        """Inicializa el diálogo de gestión de proyectos y construye su interfaz."""
         super().__init__(parent)
         self.db = db
         self.selected_project_id = None
@@ -79,6 +82,7 @@ class ProjectDialog(QDialog):
         self._reload_list()
 
     def paintEvent(self, event):
+        """Dibuja el fondo decorativo temático del diálogo."""
         super().paintEvent(event)
         painter = QPainter(self)
         painter.setClipRect(event.rect())
@@ -86,17 +90,20 @@ class ProjectDialog(QDialog):
         painter.end()
 
     def _refresh_icons(self):
+        """Actualiza los iconos del diálogo acorde a los colores del tema activo."""
         c = theme.colors()
         self.title_icon.setPixmap(icons.brand_pixmap(20))
         if hasattr(self, "empty_icon"):
             self.empty_icon.setPixmap(icons.pixmap("library", c["text_muted"], size=52))
 
     def _on_theme_changed(self, *_args):
+        """Manejador ejecutado al cambiar el tema visual de la aplicación."""
         self._refresh_icons()
         self._reload_list(select_id=self._current_project_id())
         self.update()
 
     def _build_list_widget(self) -> QWidget:
+        """Construye el widget de lista de proyectos."""
         self.list_widget = QListWidget()
         self.list_widget.setSpacing(2)
         self.list_widget.setIconSize(QSize(18, 18))
@@ -104,6 +111,7 @@ class ProjectDialog(QDialog):
         return self.list_widget
 
     def _build_empty_state(self) -> QWidget:
+        """Construye la vista de estado vacío cuando no existen proyectos."""
         empty = QWidget()
         layout = QVBoxLayout(empty)
         layout.addStretch(1)
@@ -123,6 +131,7 @@ class ProjectDialog(QDialog):
         return empty
 
     def _reload_list(self, select_id=None):
+        """Recarga la lista de proyectos desde la base de datos y selecciona uno opcionalmente."""
         self.list_widget.clear()
         projects = self.db.list_projects()
         target_row = None
@@ -143,10 +152,12 @@ class ProjectDialog(QDialog):
             self.list_widget.setCurrentRow(0)
 
     def _current_project_id(self):
+        """Retorna el identificador del proyecto actualmente seleccionado en la lista, o None."""
         item = self.list_widget.currentItem()
         return item.data(Qt.UserRole) if item else None
 
     def _create_project(self):
+        """Solicita un nombre al usuario y crea un nuevo proyecto en la base de datos."""
         name, ok = QInputDialog.getText(self, "Nuevo proyecto", "Nombre de la novela:")
         if not ok or not name.strip():
             return
@@ -161,6 +172,7 @@ class ProjectDialog(QDialog):
         self._reload_list(select_id=new_id)
 
     def _rename_project(self):
+        """Solicita un nuevo nombre y renombra el proyecto seleccionado."""
         project_id = self._current_project_id()
         if project_id is None:
             return
@@ -177,6 +189,7 @@ class ProjectDialog(QDialog):
         self._reload_list(select_id=project_id)
 
     def _delete_project(self):
+        """Pide confirmación y elimina el proyecto seleccionado junto con sus datos relacionados."""
         project_id = self._current_project_id()
         if project_id is None:
             return
@@ -193,6 +206,7 @@ class ProjectDialog(QDialog):
         self._reload_list()
 
     def _open_selected(self):
+        """Abre el proyecto seleccionado y cierra el diálogo con resultado aceptado."""
         project_id = self._current_project_id()
         if project_id is None:
             QMessageBox.information(self, "Ningún proyecto", "Crea o selecciona un proyecto primero.")

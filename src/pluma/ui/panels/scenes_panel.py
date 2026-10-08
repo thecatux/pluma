@@ -30,6 +30,7 @@ class FlowLayout(QLayout):
     un vistazo."""
 
     def __init__(self, parent=None, margin=0, spacing=6):
+        """Inicializa el layout fluido con márgenes y separación opcionales."""
         super().__init__(parent)
         if parent is not None:
             self.setContentsMargins(margin, margin, margin, margin)
@@ -37,38 +38,48 @@ class FlowLayout(QLayout):
         self._items = []
 
     def addItem(self, item):
+        """Añade un elemento al final de la secuencia del layout."""
         self._items.append(item)
 
     def count(self):
+        """Devuelve el número de elementos administrados."""
         return len(self._items)
 
     def itemAt(self, index):
+        """Devuelve el elemento en el índice indicado o None si no existe."""
         if 0 <= index < len(self._items):
             return self._items[index]
         return None
 
     def takeAt(self, index):
+        """Retira y devuelve el elemento indicado, si el índice es válido."""
         if 0 <= index < len(self._items):
             return self._items.pop(index)
         return None
 
     def expandingDirections(self):
+        """Indica que el layout no solicita expansión en ninguna dirección."""
         return Qt.Orientation(0)
 
     def hasHeightForWidth(self):
+        """Indica que la altura depende del ancho disponible."""
         return True
 
     def heightForWidth(self, width):
+        """Calcula la altura necesaria para distribuir los elementos en ese ancho."""
         return self._do_layout(QRect(0, 0, width, 0), test_only=True)
 
     def setGeometry(self, rect):
+        """Asigna la geometría y coloca los elementos dentro del rectángulo."""
         super().setGeometry(rect)
         self._do_layout(rect, test_only=False)
 
     def sizeHint(self):
+        """Devuelve el tamaño mínimo requerido por los elementos y márgenes."""
         return self.minimumSize()
 
     def minimumSize(self):
+        """Calcula el tamaño mínimo que contiene todos los elementos."""
         size = QSize()
         for item in self._items:
             size = size.expandedTo(item.minimumSize())
@@ -77,6 +88,7 @@ class FlowLayout(QLayout):
         return size
 
     def _do_layout(self, rect, test_only):
+        """Distribuye los elementos por filas y devuelve la altura resultante."""
         left, top, right, bottom = self.getContentsMargins()
         effective = rect.adjusted(left, top, -right, -bottom)
         x, y = effective.x(), effective.y()
@@ -101,6 +113,7 @@ class _ChapterChip(QPushButton):
     """Botón conmutable que representa un capítulo enlazable a la escena."""
 
     def __init__(self, chapter_id, title, checked, parent=None):
+        """Inicializa el botón conmutable asociado a un capítulo."""
         super().__init__(title, parent)
         self.chapter_id = chapter_id
         self.setCheckable(True)
@@ -111,7 +124,10 @@ class _ChapterChip(QPushButton):
 
 
 class ScenesPanel(QWidget):
+    """Panel para describir escenas y vincularlas con capítulos."""
+
     def __init__(self, db, parent=None):
+        """Construye la lista de escenas y su formulario de edición."""
         super().__init__(parent)
         self.db = db
         self.project_id = None
@@ -138,13 +154,16 @@ class ScenesPanel(QWidget):
         theme.signals.changed.connect(self._apply_empty_state_theme)
 
     def _apply_settings(self):
+        """Actualiza el retardo del temporizador de autoguardado."""
         self._save_timer.setInterval(settings.autosave_interval_ms)
 
     def _apply_empty_state_theme(self, *_args):
+        """Actualiza el icono del estado vacío con el tema activo."""
         self.empty_icon_label.setPixmap(icons.pixmap("clapper", theme.colors()["text_muted"], size=52))
 
     # ------------------------------------------------------------------ #
     def _build_list_column(self) -> QWidget:
+        """Construye la lista ordenable y las acciones de gestión de escenas."""
         left = QWidget()
         left_layout = QVBoxLayout(left)
         left_layout.setContentsMargins(14, 16, 10, 14)
@@ -180,12 +199,14 @@ class ScenesPanel(QWidget):
         return left
 
     def _build_detail_column(self) -> QWidget:
+        """Apila el estado vacío y el formulario de escena."""
         self.right_stack = QStackedWidget()
         self.right_stack.addWidget(self._build_empty_state_widget())
         self.right_stack.addWidget(self._build_form_widget())
         return self.right_stack
 
     def _build_empty_state_widget(self) -> QWidget:
+        """Construye la vista mostrada cuando el proyecto no tiene escenas."""
         empty = QWidget()
         layout = QVBoxLayout(empty)
         layout.addStretch(1)
@@ -214,6 +235,7 @@ class ScenesPanel(QWidget):
         return empty
 
     def _build_form_widget(self) -> QWidget:
+        """Construye el editor de escena, sus vínculos y sus campos."""
         right = QWidget()
         right_layout = QVBoxLayout(right)
         right_layout.setContentsMargins(24, 22, 24, 16)
@@ -255,12 +277,14 @@ class ScenesPanel(QWidget):
 
     # ------------------------------------------------------------------ #
     def load_project(self, project_id: int):
+        """Guarda cambios pendientes y carga las escenas del proyecto."""
         self._flush_pending_save()
         self.project_id = project_id
         self._current_scene_id = None
         self._reload_list()
 
     def _reload_list(self, select_id=None):
+        """Recarga escenas y subtítulos, conservando la selección si se indica."""
         self._loading = True
         self.list_widget.clear()
         scenes = self.db.list_scenes(self.project_id) if self.project_id else []
@@ -283,9 +307,11 @@ class ScenesPanel(QWidget):
             self._show_empty_state()
 
     def _current_chapters(self):
+        """Devuelve los capítulos del proyecto activo."""
         return self.db.list_chapters(self.project_id) if self.project_id else []
 
     def _chapter_subtitle(self, scene_id, chapters_by_id=None):
+        """Resume los capítulos vinculados a una escena."""
         if chapters_by_id is None:
             chapters_by_id = {c["id"]: c["title"] for c in self._current_chapters()}
         linked_ids = self.db.get_scene_chapter_links(scene_id)
@@ -295,16 +321,19 @@ class ScenesPanel(QWidget):
         return ", ".join(names)
 
     def _scene_item_text(self, scene_id, title, chapters_by_id=None):
+        """Combina el título de la escena y sus capítulos para la lista."""
         subtitle = self._chapter_subtitle(scene_id, chapters_by_id)
         return f"{title or '(sin título)'}\n     {subtitle}"
 
     def _refresh_current_list_item(self):
+        """Actualiza el texto de la escena seleccionada y sus vínculos."""
         item = self.list_widget.currentItem()
         if item is None or self._current_scene_id is None:
             return
         item.setText(self._scene_item_text(self._current_scene_id, self.title_edit.text()))
 
     def _on_selection_changed(self, current, previous):
+        """Guarda la escena anterior y carga la nueva selección."""
         if self._loading:
             return
         self._flush_pending_save()
@@ -316,6 +345,7 @@ class ScenesPanel(QWidget):
         self._load_scene(current.data(Qt.UserRole))
 
     def _on_rows_moved(self, *_args):
+        """Persiste el orden de las escenas después de arrastrarlas."""
         if self._loading or self.project_id is None:
             return
         ordered_ids = [
@@ -326,6 +356,7 @@ class ScenesPanel(QWidget):
         self._reload_list(select_id=self._current_scene_id)
 
     def _load_scene(self, scene_id: int):
+        """Carga el título, los vínculos y los campos guardados de una escena."""
         row = self.db.get_scene(scene_id)
         if row is None:
             return
@@ -341,6 +372,7 @@ class ScenesPanel(QWidget):
         self.remove_button.setEnabled(True)
 
     def _reload_chapter_links(self, scene_id):
+        """Reconstruye los chips de capítulos con su estado de vínculo actual."""
         while self.chapters_flow.count():
             item = self.chapters_flow.takeAt(0)
             widget = item.widget()
@@ -361,25 +393,30 @@ class ScenesPanel(QWidget):
             self.chapters_flow.addWidget(chip)
 
     def _show_empty_state(self):
+        """Muestra el estado vacío y deshabilita la acción de eliminar."""
         self.right_stack.setCurrentIndex(0)
         self.remove_button.setEnabled(False)
 
     def _clear_fields(self):
+        """Elimina del formulario las filas de campos actuales."""
         self.fields.clear()
 
     def _add_field_row(self, field_id, field_name, field_value):
+        """Crea una fila de campo y la añade al formulario."""
         row = FieldRow(field_id, field_name, field_value, self._on_field_changed, self._on_field_delete)
         self.fields.add_row(row)
         return row
 
     # ------------------------------------------------------------------ #
     def _on_title_edited(self, text):
+        """Actualiza el título de la lista y programa su guardado."""
         if self._current_scene_id is None:
             return
         self._refresh_current_list_item()
         self._schedule_save()
 
     def _on_chapter_chip_toggled(self, _checked):
+        """Persiste los vínculos reflejados por el estado actual de los chips."""
         if self._loading or self._current_scene_id is None:
             return
         linked = [
@@ -391,23 +428,28 @@ class ScenesPanel(QWidget):
         self._refresh_current_list_item()
 
     def _on_field_changed(self, row: FieldRow):
+        """Programa el guardado tras editar un campo."""
         self._schedule_save()
 
     def _on_field_delete(self, row: FieldRow):
+        """Elimina de la base de datos y del formulario el campo indicado."""
         if row.field_id is not None:
             self.db.delete_scene_field(row.field_id)
         self.fields.remove_row(row)
 
     def _on_fields_reordered(self, ordered_ids):
+        """Persiste el nuevo orden de los campos de la escena."""
         if self._current_scene_id is not None:
             self.db.reorder_scene_fields(self._current_scene_id, ordered_ids)
 
     def _schedule_save(self):
+        """Reinicia el temporizador si hay una escena activa y no se está cargando."""
         if self._loading or self._current_scene_id is None:
             return
         self._save_timer.start()
 
     def _save_fields(self):
+        """Guarda el título y los valores de los campos de la escena activa."""
         if self._current_scene_id is None:
             return
         self.db.update_scene(self._current_scene_id, title=self.title_edit.text().strip() or "Sin título")
@@ -415,12 +457,14 @@ class ScenesPanel(QWidget):
             self.db.update_scene_field(row.field_id, field_name=row.field_name(), field_value=row.field_value())
 
     def _flush_pending_save(self):
+        """Ejecuta de inmediato el guardado pendiente, si lo hay."""
         if self._save_timer.isActive():
             self._save_timer.stop()
             self._save_fields()
 
     # ------------------------------------------------------------------ #
     def add_scene(self):
+        """Crea una escena y enfoca su campo de título."""
         if self.project_id is None:
             return
         self._flush_pending_save()
@@ -430,6 +474,7 @@ class ScenesPanel(QWidget):
         self.title_edit.selectAll()
 
     def remove_current_scene(self):
+        """Elimina la escena seleccionada, con confirmación si está configurada."""
         if self._current_scene_id is None:
             return
         if settings.confirm_before_delete:
@@ -444,6 +489,7 @@ class ScenesPanel(QWidget):
         self._reload_list()
 
     def add_custom_field(self):
+        """Solicita un nombre y añade un aspecto personalizado a la escena."""
         if self._current_scene_id is None:
             return
         name, ok = QInputDialog.getText(self, "Nuevo aspecto", "Nombre del aspecto:")

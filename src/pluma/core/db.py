@@ -23,6 +23,7 @@ from pluma.core.paths import program_dir, user_data_dir
 
 
 def _default_db_path() -> str:
+    """Calcula la ruta predeterminada de la base de datos SQLite."""
     env_path = os.environ.get("PLUMA_DB_PATH")
     if env_path:
         return env_path
@@ -95,6 +96,8 @@ DEFAULT_GENRES = [
 
 
 class Database:
+    """Gestor de persistencia SQLite para proyectos, capítulos, personajes, escenas y notas."""
+
     def __init__(self, path: str = DEFAULT_DB_PATH):
         self.path = path
         os.makedirs(os.path.dirname(os.path.abspath(path)) or ".", exist_ok=True)
@@ -111,6 +114,7 @@ class Database:
         self._init_schema()
 
     def close(self):
+        """Cierra la conexión con la base de datos."""
         self._conn.close()
 
     def backup_to(self, dest_path: str):
@@ -154,6 +158,7 @@ class Database:
     # Esquema
     # ------------------------------------------------------------------ #
     def _init_schema(self):
+        """Crea las tablas e índices necesarios si no existen y ejecuta migraciones."""
         with self._tx() as cur:
             cur.executescript(
                 """
@@ -318,6 +323,7 @@ class Database:
 
     @contextmanager
     def _tx(self):
+        """Context manager que abre una transacción SQLite con commit automático o rollback ante error."""
         cur = self._conn.cursor()
         try:
             yield cur
@@ -328,18 +334,21 @@ class Database:
 
     @staticmethod
     def _now() -> str:
+        """Devuelve la marca temporal actual en formato YYYY-MM-DD HH:MM:SS."""
         return time.strftime("%Y-%m-%d %H:%M:%S")
 
     # ------------------------------------------------------------------ #
     # Proyectos
     # ------------------------------------------------------------------ #
     def list_projects(self) -> list[sqlite3.Row]:
+        """Devuelve la lista de proyectos ordenados por fecha de última apertura o creación descendente."""
         cur = self._conn.execute(
             "SELECT * FROM projects ORDER BY COALESCE(last_opened_at, created_at) DESC"
         )
         return cur.fetchall()
 
     def create_project(self, name: str) -> int:
+        """Crea un nuevo proyecto con el nombre dado y devuelve su identificador."""
         name = name.strip()
         if not name:
             raise ValueError("El nombre del proyecto no puede estar vacío.")
@@ -351,6 +360,7 @@ class Database:
             return cur.lastrowid
 
     def rename_project(self, project_id: int, new_name: str):
+        """Modifica el nombre identificativo de un proyecto existente."""
         new_name = new_name.strip()
         if not new_name:
             raise ValueError("El nombre del proyecto no puede estar vacío.")
@@ -358,20 +368,24 @@ class Database:
             cur.execute("UPDATE projects SET name = ? WHERE id = ?", (new_name, project_id))
 
     def touch_project(self, project_id: int):
+        """Actualiza la fecha de última apertura del proyecto a la fecha y hora actual."""
         with self._tx() as cur:
             cur.execute(
                 "UPDATE projects SET last_opened_at = ? WHERE id = ?", (self._now(), project_id)
             )
 
     def delete_project(self, project_id: int):
+        """Elimina un proyecto y todos sus datos vinculados en cascada."""
         with self._tx() as cur:
             cur.execute("DELETE FROM projects WHERE id = ?", (project_id,))
 
     def get_project(self, project_id: int) -> Optional[sqlite3.Row]:
+        """Obtiene la fila correspondiente al proyecto según su ID, o None si no existe."""
         cur = self._conn.execute("SELECT * FROM projects WHERE id = ?", (project_id,))
         return cur.fetchone()
 
     def get_project_ui_state(self, project_id: int) -> dict[str, Any]:
+        """Recupera el diccionario de estado de interfaz guardado para el proyecto."""
         cur = self._conn.execute(
             "SELECT state_json FROM project_ui_state WHERE project_id = ?", (project_id,)
         )
@@ -385,6 +399,7 @@ class Database:
         return state if isinstance(state, dict) else {}
 
     def save_project_ui_state(self, project_id: int, state: dict[str, Any]):
+        """Guarda o actualiza el estado de la interfaz del proyecto en formato JSON."""
         state_json = json.dumps(state, ensure_ascii=False)
         with self._tx() as cur:
             cur.execute(
@@ -395,6 +410,7 @@ class Database:
             )
 
     def project_exists(self, project_id: int) -> bool:
+        """Comprueba si un proyecto con el identificador dado existe en la base de datos."""
         cur = self._conn.execute("SELECT 1 FROM projects WHERE id = ?", (project_id,))
         return cur.fetchone() is not None
 
@@ -402,6 +418,7 @@ class Database:
     # Datos generales de la novela (ficha del proyecto)
     # ------------------------------------------------------------------ #
     def get_project_info(self, project_id: int) -> Optional[sqlite3.Row]:
+        """Devuelve los datos generales de la ficha de la novela (título, autor, género, sinopsis, extensión)."""
         cur = self._conn.execute(
             "SELECT id, name, title, author, genre, synopsis, page_count "
             "FROM projects WHERE id = ?",
@@ -410,12 +427,14 @@ class Database:
         return cur.fetchone()
 
     def update_project_info(self, project_id: int, **fields):
+        """Actualiza los campos de la ficha general de la novela."""
         self._update_row("projects", project_id, fields)
 
     # ------------------------------------------------------------------ #
     # Capítulos
     # ------------------------------------------------------------------ #
     def list_chapters(self, project_id: int) -> list[sqlite3.Row]:
+        """Obtiene todos los capítulos del proyecto ordenados secuencialmente."""
         cur = self._conn.execute(
             "SELECT * FROM chapters WHERE project_id = ? ORDER BY order_index, id",
             (project_id,),
@@ -423,10 +442,12 @@ class Database:
         return cur.fetchall()
 
     def get_chapter(self, chapter_id: int) -> Optional[sqlite3.Row]:
+        """Devuelve la fila del capítulo según su identificador o None si no existe."""
         cur = self._conn.execute("SELECT * FROM chapters WHERE id = ?", (chapter_id,))
         return cur.fetchone()
 
     def count_chapters(self, project_id: int) -> int:
+        """Devuelve el número total de capítulos del proyecto."""
         cur = self._conn.execute("SELECT COUNT(*) FROM chapters WHERE project_id = ?", (project_id,))
         return cur.fetchone()[0]
 
@@ -440,6 +461,7 @@ class Database:
         return cur.fetchone()[0]
 
     def create_chapter(self, project_id: int, title: str = "Nuevo capítulo") -> int:
+        """Crea un nuevo capítulo al final del orden actual y devuelve su ID."""
         with self._tx() as cur:
             cur.execute(
                 "SELECT COALESCE(MAX(order_index), -1) + 1 FROM chapters WHERE project_id = ?",
@@ -453,9 +475,11 @@ class Database:
             return cur.lastrowid
 
     def update_chapter(self, chapter_id: int, **fields):
+        """Actualiza los campos especificados del capítulo (título, contenido, sinopsis, word_count)."""
         self._update_row("chapters", chapter_id, fields)
 
     def delete_chapter(self, chapter_id: int):
+        """Elimina un capítulo por su ID (en cascada elimina enlaces con escenas y desenlaza bloques)."""
         with self._tx() as cur:
             cur.execute("DELETE FROM chapters WHERE id = ?", (chapter_id,))
 
@@ -472,6 +496,7 @@ class Database:
     # Personajes (ficha con campos flexibles clave/valor)
     # ------------------------------------------------------------------ #
     def list_characters(self, project_id: int) -> list[sqlite3.Row]:
+        """Devuelve la lista de personajes del proyecto en su orden actual."""
         cur = self._conn.execute(
             "SELECT * FROM characters WHERE project_id = ? ORDER BY order_index, id",
             (project_id,),
@@ -479,10 +504,12 @@ class Database:
         return cur.fetchall()
 
     def get_character(self, character_id: int) -> Optional[sqlite3.Row]:
+        """Obtiene la fila del personaje por su identificador o None si no existe."""
         cur = self._conn.execute("SELECT * FROM characters WHERE id = ?", (character_id,))
         return cur.fetchone()
 
     def create_character(self, project_id: int, name: str = "Nuevo personaje") -> int:
+        """Crea un personaje con la plantilla de campos por defecto y devuelve su ID."""
         with self._tx() as cur:
             cur.execute(
                 "SELECT COALESCE(MAX(order_index), -1) + 1 FROM characters WHERE project_id = ?",
@@ -503,13 +530,16 @@ class Database:
             return character_id
 
     def update_character(self, character_id: int, **fields):
+        """Actualiza los atributos del personaje (p. ej. nombre)."""
         self._update_row("characters", character_id, fields)
 
     def delete_character(self, character_id: int):
+        """Elimina un personaje y sus campos asociados en cascada."""
         with self._tx() as cur:
             cur.execute("DELETE FROM characters WHERE id = ?", (character_id,))
 
     def reorder_characters(self, project_id: int, ordered_ids: list[int]):
+        """Actualiza el orden de los personajes del proyecto según la lista de IDs recibida."""
         with self._tx() as cur:
             for index, character_id in enumerate(ordered_ids):
                 cur.execute(
@@ -518,6 +548,7 @@ class Database:
                 )
 
     def list_character_fields(self, character_id: int) -> list[sqlite3.Row]:
+        """Devuelve los campos de la ficha del personaje ordenados."""
         cur = self._conn.execute(
             "SELECT * FROM character_fields WHERE character_id = ? ORDER BY order_index, id",
             (character_id,),
@@ -525,6 +556,7 @@ class Database:
         return cur.fetchall()
 
     def add_character_field(self, character_id: int, field_name: str, field_value: str = "") -> int:
+        """Añade un campo nuevo al final de la ficha del personaje y devuelve su ID."""
         with self._tx() as cur:
             cur.execute(
                 "SELECT COALESCE(MAX(order_index), -1) + 1 FROM character_fields WHERE character_id = ?",
@@ -539,19 +571,23 @@ class Database:
             return cur.lastrowid
 
     def update_character_field(self, field_id: int, **fields):
+        """Actualiza el nombre o valor de un campo de personaje."""
         self._update_row("character_fields", field_id, fields)
 
     def delete_character_field(self, field_id: int):
+        """Elimina un campo de la ficha de personaje por su ID."""
         with self._tx() as cur:
             cur.execute("DELETE FROM character_fields WHERE id = ?", (field_id,))
 
     def reorder_character_fields(self, character_id: int, ordered_ids: list[int]):
+        """Reordena los campos de la ficha del personaje según la lista de IDs."""
         self._reorder_rows("character_fields", "character_id", character_id, ordered_ids)
 
     # ------------------------------------------------------------------ #
     # Escenas (ficha flexible + enlace con capítulos)
     # ------------------------------------------------------------------ #
     def list_scenes(self, project_id: int) -> list[sqlite3.Row]:
+        """Devuelve todas las escenas del proyecto en su orden actual."""
         cur = self._conn.execute(
             "SELECT * FROM scenes WHERE project_id = ? ORDER BY order_index, id",
             (project_id,),
@@ -559,10 +595,12 @@ class Database:
         return cur.fetchall()
 
     def get_scene(self, scene_id: int) -> Optional[sqlite3.Row]:
+        """Obtiene la fila de la escena por su identificador o None si no existe."""
         cur = self._conn.execute("SELECT * FROM scenes WHERE id = ?", (scene_id,))
         return cur.fetchone()
 
     def create_scene(self, project_id: int, title: str = "Nueva escena") -> int:
+        """Crea una escena con los aspectos predeterminados y devuelve su ID."""
         with self._tx() as cur:
             cur.execute(
                 "SELECT COALESCE(MAX(order_index), -1) + 1 FROM scenes WHERE project_id = ?",
@@ -583,13 +621,16 @@ class Database:
             return scene_id
 
     def update_scene(self, scene_id: int, **fields):
+        """Actualiza el título u otros datos de la escena."""
         self._update_row("scenes", scene_id, fields)
 
     def delete_scene(self, scene_id: int):
+        """Elimina una escena y sus campos y enlaces asociados en cascada."""
         with self._tx() as cur:
             cur.execute("DELETE FROM scenes WHERE id = ?", (scene_id,))
 
     def reorder_scenes(self, project_id: int, ordered_ids: list[int]):
+        """Actualiza el orden de las escenas del proyecto según la lista de IDs."""
         with self._tx() as cur:
             for index, scene_id in enumerate(ordered_ids):
                 cur.execute(
@@ -598,6 +639,7 @@ class Database:
                 )
 
     def list_scene_fields(self, scene_id: int) -> list[sqlite3.Row]:
+        """Devuelve los aspectos/campos de la escena ordenados."""
         cur = self._conn.execute(
             "SELECT * FROM scene_fields WHERE scene_id = ? ORDER BY order_index, id",
             (scene_id,),
@@ -605,6 +647,7 @@ class Database:
         return cur.fetchall()
 
     def add_scene_field(self, scene_id: int, field_name: str, field_value: str = "") -> int:
+        """Añade un aspecto a la escena y devuelve su identificador."""
         with self._tx() as cur:
             cur.execute(
                 "SELECT COALESCE(MAX(order_index), -1) + 1 FROM scene_fields WHERE scene_id = ?",
@@ -618,22 +661,27 @@ class Database:
             return cur.lastrowid
 
     def update_scene_field(self, field_id: int, **fields):
+        """Actualiza el nombre o valor de un aspecto de la escena."""
         self._update_row("scene_fields", field_id, fields)
 
     def delete_scene_field(self, field_id: int):
+        """Elimina un aspecto de la escena por su ID."""
         with self._tx() as cur:
             cur.execute("DELETE FROM scene_fields WHERE id = ?", (field_id,))
 
     def reorder_scene_fields(self, scene_id: int, ordered_ids: list[int]):
+        """Reordena los aspectos de la escena según la lista de IDs."""
         self._reorder_rows("scene_fields", "scene_id", scene_id, ordered_ids)
 
     def get_scene_chapter_links(self, scene_id: int) -> list[int]:
+        """Devuelve la lista de IDs de capítulos vinculados a la escena."""
         cur = self._conn.execute(
             "SELECT chapter_id FROM scene_chapter_links WHERE scene_id = ?", (scene_id,)
         )
         return [row[0] for row in cur.fetchall()]
 
     def set_scene_chapter_links(self, scene_id: int, chapter_ids: list[int]):
+        """Establece la lista de capítulos vinculados a la escena reemplazando los anteriores."""
         with self._tx() as cur:
             cur.execute("DELETE FROM scene_chapter_links WHERE scene_id = ?", (scene_id,))
             for chapter_id in chapter_ids:
@@ -646,6 +694,7 @@ class Database:
     # Esquema (línea temporal: bloques ordenables y agrupables)
     # ------------------------------------------------------------------ #
     def list_timeline_blocks(self, project_id: int) -> list[sqlite3.Row]:
+        """Devuelve todos los bloques de la línea temporal del proyecto ordenados."""
         cur = self._conn.execute(
             "SELECT * FROM timeline_blocks WHERE project_id = ? ORDER BY order_index, id",
             (project_id,),
@@ -653,6 +702,7 @@ class Database:
         return cur.fetchall()
 
     def create_timeline_block(self, project_id: int, title: str = "Nuevo evento") -> int:
+        """Crea un bloque de evento al final de la línea temporal y devuelve su ID."""
         with self._tx() as cur:
             cur.execute(
                 "SELECT COALESCE(MAX(order_index), -1) + 1 FROM timeline_blocks WHERE project_id = ?",
@@ -666,6 +716,7 @@ class Database:
             return cur.lastrowid
 
     def update_timeline_block(self, block_id: int, **fields):
+        """Actualiza los campos de un bloque de evento en la línea temporal."""
         self._update_row("timeline_blocks", block_id, fields)
 
     def duplicate_timeline_block(self, block_id: int) -> Optional[int]:
@@ -690,10 +741,12 @@ class Database:
             return cur.lastrowid
 
     def delete_timeline_block(self, block_id: int):
+        """Elimina un bloque de la línea temporal por su ID."""
         with self._tx() as cur:
             cur.execute("DELETE FROM timeline_blocks WHERE id = ?", (block_id,))
 
     def reorder_timeline_blocks(self, project_id: int, ordered_ids: list[int]):
+        """Reordena los bloques de la línea temporal según la lista de IDs."""
         with self._tx() as cur:
             for index, block_id in enumerate(ordered_ids):
                 cur.execute(
@@ -705,6 +758,7 @@ class Database:
     # Notas
     # ------------------------------------------------------------------ #
     def list_notes(self, project_id: int) -> list[sqlite3.Row]:
+        """Devuelve todas las notas del proyecto en su orden actual."""
         cur = self._conn.execute(
             "SELECT * FROM notes WHERE project_id = ? ORDER BY order_index, id",
             (project_id,),
@@ -712,10 +766,12 @@ class Database:
         return cur.fetchall()
 
     def get_note(self, note_id: int) -> Optional[sqlite3.Row]:
+        """Obtiene una nota según su identificador o None si no existe."""
         cur = self._conn.execute("SELECT * FROM notes WHERE id = ?", (note_id,))
         return cur.fetchone()
 
     def create_note(self, project_id: int, title: str = "Nueva nota") -> int:
+        """Crea una nota al final de la lista del proyecto y devuelve su ID."""
         with self._tx() as cur:
             cur.execute(
                 "SELECT COALESCE(MAX(order_index), -1) + 1 FROM notes WHERE project_id = ?",
@@ -730,15 +786,18 @@ class Database:
             return cur.lastrowid
 
     def update_note(self, note_id: int, **fields):
+        """Actualiza los campos de una nota y registra la fecha de última edición."""
         fields = dict(fields)
         fields["updated_at"] = self._now()
         self._update_row("notes", note_id, fields)
 
     def delete_note(self, note_id: int):
+        """Elimina una nota por su ID."""
         with self._tx() as cur:
             cur.execute("DELETE FROM notes WHERE id = ?", (note_id,))
 
     def reorder_notes(self, project_id: int, ordered_ids: list[int]):
+        """Reordena las notas del proyecto según la lista de IDs."""
         with self._tx() as cur:
             for index, note_id in enumerate(ordered_ids):
                 cur.execute(
@@ -750,6 +809,7 @@ class Database:
     # Utilidad genérica
     # ------------------------------------------------------------------ #
     def _update_row(self, table: str, row_id: int, fields: dict[str, Any]):
+        """Ejecuta un UPDATE dinámico sobre la tabla y fila especificadas."""
         if not fields:
             return
         columns = ", ".join(f"{key} = ?" for key in fields)

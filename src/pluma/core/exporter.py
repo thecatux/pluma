@@ -55,6 +55,7 @@ def build_document(chapters, info=None) -> QTextDocument:
 
 def _insert_paragraph(cursor, text, size, *, bold=False, align=Qt.AlignLeft,
                       heading_level=0, top_margin=0, page_break=False):
+    """Inserta un bloque de párrafo formateado con la alineación, tamaño y márgenes indicados."""
     if not cursor.document().isEmpty():
         cursor.insertBlock()
     block_format = QTextBlockFormat()
@@ -72,6 +73,7 @@ def _insert_paragraph(cursor, text, size, *, bold=False, align=Qt.AlignLeft,
 
 
 def _insert_cover(cursor, info):
+    """Inserta la página de portada en el cursor con los datos generales de la novela."""
     _insert_paragraph(cursor, info["title"] or info["name"], COVER_TITLE_SIZE, bold=True,
                       align=Qt.AlignCenter, heading_level=1, top_margin=COVER_TOP_MARGIN)
     for text, size in ((info["author"], 16), (info["genre"], 12)):
@@ -82,6 +84,7 @@ def _insert_cover(cursor, info):
 
 
 def _insert_chapter(cursor, chapter, heading_level):
+    """Inserta el título y el cuerpo HTML del capítulo en el documento."""
     _insert_paragraph(cursor, chapter["title"] or "Sin título", CHAPTER_TITLE_SIZE, bold=True,
                       align=Qt.AlignCenter, heading_level=heading_level,
                       page_break=not cursor.document().isEmpty())
@@ -89,6 +92,7 @@ def _insert_chapter(cursor, chapter, heading_level):
 
 
 def _insert_html_body(cursor, html):
+    """Inserta el contenido HTML del capítulo preservando el formato de bloque inicial."""
     body = QTextDocument()
     body.setHtml(html)
     cursor.insertBlock(QTextBlockFormat(), QTextCharFormat())
@@ -104,6 +108,7 @@ def _insert_html_body(cursor, html):
 # Escritores por formato
 # ---------------------------------------------------------------------- #
 def _write_pdf(path, document):
+    """Genera un archivo PDF A4 a partir del QTextDocument."""
     writer = QPdfWriter(path)
     writer.setPageSize(QPageSize(QPageSize.PageSizeId.A4))
     writer.setPageMargins(QMarginsF(PAGE_MARGIN_MM, PAGE_MARGIN_MM, PAGE_MARGIN_MM, PAGE_MARGIN_MM),
@@ -112,15 +117,18 @@ def _write_pdf(path, document):
 
 
 def _write_odt(path, document):
+    """Escribe el QTextDocument en formato OpenDocument (.odt)."""
     if not QTextDocumentWriter(path, QByteArray(b"ODF")).write(document):
         raise ExportError("No se pudo escribir el archivo .odt.")
 
 
 def _write_txt(path, document):
+    """Vuelca el contenido en texto plano UTF-8."""
     Path(path).write_text(document.toPlainText(), encoding="utf-8")
 
 
 def _write_markdown(path, document):
+    """Convierte los bloques y listas del QTextDocument a Markdown."""
     blocks = []
     block = document.begin()
     while block.isValid():
@@ -143,6 +151,7 @@ def _write_markdown(path, document):
 
 
 def _markdown_block_content(block):
+    """Extrae y formatea los fragmentos de un bloque de texto en sintaxis Markdown."""
     parts = []
     fragment = block.begin()
     while not fragment.atEnd():
@@ -185,6 +194,7 @@ def _markdown_block_content(block):
 
 
 def _write_docx(path, document):
+    """Convierte el QTextDocument en un archivo Word .docx con python-docx."""
     if docx is None:
         raise ExportError("Para exportar a .docx hace falta instalar python-docx "
                           "(pip install python-docx).")
@@ -199,6 +209,7 @@ def _write_docx(path, document):
 
 
 def _add_docx_paragraph(word, block):
+    """Añade un párrafo formateado al documento docx."""
     block_format = block.blockFormat()
     level = block_format.headingLevel()
     paragraph = word.add_heading("", level) if level else word.add_paragraph()
@@ -216,6 +227,7 @@ def _add_docx_paragraph(word, block):
 
 
 def _add_docx_run(paragraph, fragment):
+    """Añade un fragmento de texto con formato de carácter a un párrafo docx."""
     char_format = fragment.charFormat()
     run = paragraph.add_run(fragment.text().replace("\u2028", "\n"))
     run.bold = char_format.fontWeight() >= QFont.Weight.Bold
@@ -236,6 +248,7 @@ def _add_docx_run(paragraph, fragment):
 
 
 def _docx_alignment(alignment):
+    """Convierte la alineación de Qt en la alineación equivalente de python-docx."""
     if alignment & Qt.AlignHCenter:
         return WD_ALIGN_PARAGRAPH.CENTER
     if alignment & Qt.AlignRight:

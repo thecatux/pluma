@@ -1,14 +1,11 @@
-"""Widget de edicion de texto enriquecido reutilizable.
+"""Widget de edición de texto enriquecido reutilizable para Pluma.
 
-Es una adaptacion de RichTextEditor del editor base: conserva el motor
-de formato (negrita/cursiva/subrayado/tachado, alineacion, fuente,
-tamano, color) tal cual, pero elimina las acciones de archivo (abrir,
-guardar, guardar como) porque en Pluma el contenido de cada capitulo,
-personaje, escena o nota vive en SQLite y se autoguarda, no en ficheros
-sueltos sobre los que tenga sentido un dialogo "Abrir archivo".
+Proporciona soporte completo para estilos tipográficos (negrita, cursiva,
+subrayado, tachado), alineación de párrafos, tipografía, tamaño de fuente,
+color y caracteres especiales/literarios.
 
-Expone una senal contentChanged para que el anfitrión autoguarde en
-la base de datos sin tener que sondear el widget.
+Expone la señal contentChanged para que el anfitrión autoguarde en la base de
+datos SQLite sin necesidad de sondeo activo.
 
 Principios de diseño:
   - Un bloque puede quedarse sin ningún carácter del que Qt tome el
@@ -49,6 +46,7 @@ from pluma.ui.find_replace import FindReplaceBar
 
 @dataclass(frozen=True)
 class _CharFormatToggle:
+    """Configuración descriptiva de una acción de conmutación de formato de carácter."""
     key: str
     label: str
     shortcut: Any
@@ -59,6 +57,7 @@ class _CharFormatToggle:
 
 @dataclass(frozen=True)
 class _AlignmentOption:
+    """Configuración de una opción de alineación de texto."""
     label: str
     alignment: Qt.AlignmentFlag
     status_tip: str
@@ -108,6 +107,7 @@ class _FormatCarryingTextEdit(QTextEdit):
     _DELETE_LIKE_KEYS = (Qt.Key_Backspace, Qt.Key_Delete)
 
     def keyPressEvent(self, event):
+        """Maneja pulsaciones de teclado asegurando la preservación del formato al saltar líneas o borrar."""
         key = event.key()
         if key in (Qt.Key_Return, Qt.Key_Enter):
             self._insert_block_carrying_format()
@@ -209,6 +209,7 @@ class RichTextEditor(QWidget):
     )
 
     def __init__(self, parent=None, *, placeholder: str = ""):
+        """Inicializa el editor de texto enriquecido, sus atajos de teclado y la barra de búsqueda."""
         super().__init__(parent)
         self._char_format_by_key = {fmt.key: fmt for fmt in self._CHAR_FORMATS}
 
@@ -254,6 +255,7 @@ class RichTextEditor(QWidget):
     # Creacion de acciones
     # ------------------------------------------------------------------ #
     def _make_action(self, text, shortcut=None, status_tip=None, triggered=None, checkable=False):
+        """Crea y configura una instancia de QAction con atajos y pistas de estado."""
         action = QAction(text, self)
         if shortcut is not None:
             action.setShortcut(shortcut)
@@ -273,6 +275,7 @@ class RichTextEditor(QWidget):
         return action
 
     def _create_actions(self):
+        """Crea las acciones de formato de texto, alineación, color y búsqueda."""
         self.char_format_actions = {}
         for fmt in self._CHAR_FORMATS:
             self.char_format_actions[fmt.key] = self._make_action(
@@ -327,6 +330,7 @@ class RichTextEditor(QWidget):
     _TOOLBAR_GLYPHS = {"bold": "N", "italic": "C", "underline": "S", "strike": "T"}
 
     def create_format_toolbar(self, parent=None) -> QToolBar:
+        """Construye y devuelve una barra de herramientas lista con todos los controles de formato."""
         toolbar = QToolBar("Formato de caracteres", parent)
         toolbar.setIconSize(QSize(16, 16))
         toolbar.setToolButtonStyle(Qt.ToolButtonTextOnly)
@@ -351,12 +355,14 @@ class RichTextEditor(QWidget):
         return toolbar
 
     def _icon_only_button(self, action: QAction) -> QToolButton:
+        """Crea un botón de barra de herramientas que solo muestra su icono."""
         button = QToolButton()
         button.setDefaultAction(action)
         button.setToolButtonStyle(Qt.ToolButtonIconOnly)
         return button
 
     def _refresh_align_icons(self, *_args):
+        """Actualiza los iconos de alineación, paleta y búsqueda según el tema activo."""
         c = theme.colors()
         for opt in self._ALIGNMENTS:
             action = self.align_actions[opt.alignment]
@@ -369,6 +375,7 @@ class RichTextEditor(QWidget):
         self.search_action.setIcon(icons.icon("search", c["text"], size=16))
 
     def _glyph_button(self, action: QAction, key: str):
+        """Crea un botón tipográfico con estilo propio (negrita, cursiva, subrayado o tachado)."""
         button = QToolButton()
         button.setDefaultAction(action)
         font = button.font()
@@ -417,9 +424,11 @@ class RichTextEditor(QWidget):
         return button
 
     def _special_char_by_key(self, key: str) -> _SpecialChar:
+        """Busca y devuelve la definición de un carácter especial por su clave."""
         return next(spec for spec in self._SPECIAL_CHARS if spec.key == key)
 
     def _insert_special_char(self, spec: _SpecialChar):
+        """Inserta el carácter especial o envuelve la selección actual."""
         cursor = self.text_edit.textCursor()
         if spec.close_text:
             # Caracteres emparejados (comillas, ¿?, ¡!): si hay texto seleccionado
@@ -462,19 +471,23 @@ class RichTextEditor(QWidget):
             self.text_edit.setFocus()
 
     def _apply_char_format(self, key, checked):
+        """Aplica o desaplica un formato de carácter específico (negrita, cursiva, etc.)."""
         fmt_spec = self._char_format_by_key[key]
         self._merge_format(lambda f: fmt_spec.setter(f, checked))
 
     def set_alignment(self, alignment):
+        """Alinea el párrafo o bloque actual según el indicador Qt especificado."""
         self.text_edit.setAlignment(alignment)
         self.text_edit.setFocus()
 
     def set_font_family(self, font: QFont):
+        """Establece la familia tipográfica en la selección o posición del cursor."""
         # setFontFamilies es la API correcta en Qt6; setFontFamily esta
         # marcado como obsoleto y puede ignorarse en versiones futuras.
         self._merge_format(lambda f: f.setFontFamilies([font.family()]))
 
     def set_font_size(self, size_text):
+        """Aplica un nuevo tamaño en puntos a la selección o cursor si es válido."""
         text = str(size_text).strip() if size_text is not None else ""
         if not text:
             return
@@ -487,6 +500,7 @@ class RichTextEditor(QWidget):
         self._merge_format(lambda f: f.setFontPointSize(size))
 
     def _format_control_has_focus(self) -> bool:
+        """Comprueba si alguno de los controles de selección de fuente o tamaño tiene el foco."""
         controls = (self.font_combo, self.size_combo)
         return any(
             control.hasFocus()
@@ -495,6 +509,7 @@ class RichTextEditor(QWidget):
         )
 
     def choose_font_color(self):
+        """Abre un diálogo selector de color y aplica el color escogido al texto."""
         color = QColorDialog.getColor(self.text_edit.textColor(), self, "Seleccionar color de fuente")
         if color.isValid():
             self._merge_format(lambda f: f.setForeground(color))
@@ -532,6 +547,7 @@ class RichTextEditor(QWidget):
                     self.size_combo.setCurrentText(format(size, "g"))
 
     def _sync_alignment_action(self):
+        """Sincroniza los botones de alineación con la alineación del bloque actual."""
         alignment = self.text_edit.alignment()
         for opt in self._ALIGNMENTS:
             self.align_actions[opt.alignment].setChecked(alignment == opt.alignment)
@@ -539,6 +555,7 @@ class RichTextEditor(QWidget):
     @staticmethod
     @contextmanager
     def _signals_blocked(*widgets):
+        """Context manager para bloquear temporalmente las señales de uno o más widgets."""
         previous = [(widget, widget.blockSignals(True)) for widget in widgets]
         try:
             yield
@@ -564,9 +581,11 @@ class RichTextEditor(QWidget):
     # Contenido (HTML) - usado por el anfitrión para cargar/guardar en BD
     # ------------------------------------------------------------------ #
     def to_html(self) -> str:
+        """Devuelve el contenido actual del editor en formato HTML."""
         return self.text_edit.toHtml()
 
     def set_html(self, html: str):
+        """Carga contenido HTML en el editor reseteando el estado de modificación."""
         with self._signals_blocked(self.text_edit):
             self.text_edit.setHtml(html or "")
         self.text_edit.document().setModified(False)
@@ -574,5 +593,6 @@ class RichTextEditor(QWidget):
         self._sync_alignment_action()
 
     def word_count(self) -> int:
+        """Calcula el número de palabras en el documento actual."""
         text = self.text_edit.toPlainText()
         return len(text.split())

@@ -14,7 +14,10 @@ from pluma.ui.outline_canvas import TimelineCanvas
 
 
 class OutlinePanel(QWidget):
+    """Panel que conecta el lienzo de línea temporal con la base de datos."""
+
     def __init__(self, db, parent=None):
+        """Construye el lienzo y conecta sus señales con las operaciones de datos."""
         super().__init__(parent)
         self.db = db
         self.project_id = None
@@ -45,19 +48,23 @@ class OutlinePanel(QWidget):
         self.canvas.blocksReordered.connect(self._on_blocks_reordered)
 
     def _apply_theme(self, *_args):
+        """Aplica al texto de ayuda los colores del tema activo."""
         c = theme.colors()
         self.hint.setStyleSheet(
             f"padding: 8px 14px; background: {c['glass_subtle']}; border-bottom: 1px solid {c['glass_border']};"
         )
 
     def load_project(self, project_id: int):
+        """Carga los bloques del proyecto y reinicia la vista del lienzo."""
         self.project_id = project_id
         self._reload(reset_view=True)
 
     def refresh(self):
+        """Recarga los bloques sin reiniciar la posición ni el zoom."""
         self._reload()
 
     def _reload(self, reset_view=False, select_id=None, focus_title=False):
+        """Sincroniza bloques y capítulos y restaura opcionalmente selección y foco."""
         self.canvas.flush_pending_saves()
         if self.project_id:
             rows = self.db.list_timeline_blocks(self.project_id)
@@ -72,6 +79,7 @@ class OutlinePanel(QWidget):
     # Traducción de señales del lienzo -> SQLite
     # ------------------------------------------------------------------ #
     def _on_add_requested(self, index: int, group: str):
+        """Crea un bloque en la posición y el grupo solicitados por el lienzo."""
         if self.project_id is None:
             return
         self.canvas.flush_pending_saves()
@@ -85,9 +93,11 @@ class OutlinePanel(QWidget):
         self._reload(select_id=new_id, focus_title=True)
 
     def _on_block_changed(self, block_id, fields):
+        """Persiste los campos modificados de un bloque."""
         self.db.update_timeline_block(block_id, **fields)
 
     def _on_block_delete_requested(self, block_id):
+        """Confirma y elimina un bloque, y luego recarga el lienzo."""
         if settings.confirm_before_delete:
             ret = QMessageBox.question(
                 self, "Eliminar evento",
@@ -100,11 +110,14 @@ class OutlinePanel(QWidget):
         self._reload()
 
     def _on_block_duplicate_requested(self, block_id):
+        """Duplica un bloque y selecciona la nueva copia."""
         new_id = self.db.duplicate_timeline_block(block_id)
         self._reload(select_id=new_id)
 
     def _on_blocks_reordered(self, ordered_ids):
+        """Persiste el nuevo orden de los bloques del proyecto."""
         self.db.reorder_timeline_blocks(self.project_id, ordered_ids)
 
     def _flush_pending_save(self):
+        """Completa las ediciones pendientes del lienzo antes de sincronizarlo."""
         self.canvas.flush_pending_saves()

@@ -26,16 +26,12 @@ BACKUP_FILTER = "Base de datos SQLite (*.db)"
 
 
 class _ResponsiveCardGrid(QWidget):
-    """Coloca las tarjetas en dos columnas cuando hay ancho de sobra y
-    las apila en una sola cuando la ventana se estrecha, en vez de
-    dejarlas siempre en una única columna fija con hueco muerto al
-    lado. Las tarjetas se reparten fila a fila (no por bloques), así
-    que la altura desigual entre ellas no deja columnas descompensadas.
-    """
+    """Reorganiza las tarjetas entre una y dos columnas según el ancho."""
 
     BREAKPOINT = 760  # ancho por debajo del cual se cae a una columna
 
     def __init__(self, cards, parent=None):
+        """Inicializa la rejilla y distribuye las tarjetas en dos columnas."""
         super().__init__(parent)
         self._cards = cards
         self._columns = 0
@@ -48,12 +44,14 @@ class _ResponsiveCardGrid(QWidget):
         self._relayout(2)
 
     def resizeEvent(self, event):
+        """Recalcula el número de columnas cuando cambia el ancho."""
         super().resizeEvent(event)
         columns = 2 if self.width() >= self.BREAKPOINT else 1
         if columns != self._columns:
             self._relayout(columns)
 
     def _relayout(self, columns: int):
+        """Reconstruye la rejilla fila a fila con el número de columnas indicado."""
         self._columns = columns
         while self._grid.count():
             self._grid.takeAt(0)
@@ -65,12 +63,15 @@ class _ResponsiveCardGrid(QWidget):
 
 
 class SettingsPanel(QWidget):
+    """Panel de preferencias globales y operaciones sobre la base de datos."""
+
     # Se emite tras restaurar una copia de seguridad: la aplicación debe
     # reiniciarse, porque los demás paneles tienen cargados datos de la
     # base de datos anterior.
     database_restored = Signal()
 
     def __init__(self, db, theme_controller=None, parent=None):
+        """Construye los controles y carga las preferencias persistidas."""
         super().__init__(parent)
         self.db = db
         self.theme_controller = theme_controller
@@ -94,11 +95,6 @@ class SettingsPanel(QWidget):
         subtitle.setProperty("role", "hint")
         outer.addWidget(subtitle)
 
-        # Las tarjetas se reparten en una rejilla de dos columnas que se
-        # aprovecha del ancho disponible en pantallas anchas y se apila
-        # en una sola columna en ventanas estrechas (ver
-        # `_ResponsiveCardGrid`), en vez de dejar una sola columna fija
-        # con espacio vacío al lado.
         cards = [
             self._build_appearance_card(),
             self._build_editing_card(),
@@ -131,6 +127,7 @@ class SettingsPanel(QWidget):
     # Tarjetas
     # ------------------------------------------------------------------ #
     def _card(self, heading: str, hint: str = "") -> tuple[QFrame, QVBoxLayout]:
+        """Crea una tarjeta con encabezado y una ayuda opcional."""
         card = QFrame()
         card.setProperty("role", "card")
         card_layout = QVBoxLayout(card)
@@ -148,9 +145,7 @@ class SettingsPanel(QWidget):
         return card, card_layout
 
     def _form(self) -> QFormLayout:
-        """Formulario de estilo tradicional: etiquetas alineadas a la
-        derecha, pegadas a su control, en lugar de sueltas a la
-        izquierda con el control lejos en un bloque centrado."""
+        """Crea un formulario con etiquetas alineadas junto a sus controles."""
         form = QFormLayout()
         form.setSpacing(12)
         form.setHorizontalSpacing(16)
@@ -160,6 +155,7 @@ class SettingsPanel(QWidget):
         return form
 
     def _build_appearance_card(self) -> QFrame:
+        """Construye los controles de tema y color de acento."""
         card, layout = self._card("Apariencia", "Elige cómo se ve Pluma.")
         if self.theme_controller is not None:
             form = self._form()
@@ -210,6 +206,7 @@ class SettingsPanel(QWidget):
         return card
 
     def _build_editing_card(self) -> QFrame:
+        """Construye las preferencias de autoguardado, lectura y borrado."""
         card, layout = self._card(
             "Autoguardado y comportamiento",
             "Pluma guarda automáticamente mientras escribes; aquí puedes ajustar cuánto espera "
@@ -246,6 +243,7 @@ class SettingsPanel(QWidget):
         return card
 
     def _build_editor_card(self) -> QFrame:
+        """Construye las preferencias tipográficas del editor."""
         card, layout = self._card(
             "Editor de texto",
             "Fuente y tamaño con los que se abre el editor en capítulos y notas nuevas "
@@ -279,6 +277,7 @@ class SettingsPanel(QWidget):
         return card
 
     def _build_data_card(self) -> QFrame:
+        """Construye las acciones para abrir, respaldar y restaurar los datos."""
         card, layout = self._card(
             "Datos",
             "Todos tus proyectos viven en un único archivo de base de datos SQLite.",
@@ -325,6 +324,7 @@ class SettingsPanel(QWidget):
     # Carga inicial de valores
     # ------------------------------------------------------------------ #
     def _load_values(self):
+        """Carga los valores actuales en los controles sin volver a guardarlos."""
         self._loading = True
         if self.theme_controller is not None:
             index = self.theme_combo.findData(self.theme_controller.mode)
@@ -355,22 +355,26 @@ class SettingsPanel(QWidget):
     # Manejadores
     # ------------------------------------------------------------------ #
     def _on_theme_changed(self, _index):
+        """Aplica el modo de color elegido si el panel no está inicializándose."""
         if self._loading or self.theme_controller is None:
             return
         self.theme_controller.set_mode(self.theme_combo.currentData())
 
     def _on_visual_theme_changed(self, _index):
+        """Aplica el estilo visual elegido cuando hay un controlador de tema."""
         if self._loading or self.theme_controller is None:
             return
         self.theme_controller.set_theme(self.visual_theme_combo.currentData())
 
     def _choose_accent_color(self):
+        """Abre el selector y guarda el color de acento elegido."""
         current = QColor(self.theme_controller.accent_color)
         selected = QColorDialog.getColor(current, self, "Color de acento")
         if selected.isValid():
             self.theme_controller.set_accent_color(selected.name())
 
     def _refresh_accent_display(self, *_args):
+        """Sincroniza la muestra, el valor y la acción de restaurar el acento."""
         color = self.theme_controller.accent_color
         self.accent_value_label.setText(color.upper())
         self.accent_swatch.setStyleSheet(
@@ -380,35 +384,42 @@ class SettingsPanel(QWidget):
         self.reset_accent_button.setEnabled(self.theme_controller.has_custom_accent)
 
     def _update_autosave_label(self, value: int):
+        """Muestra el retardo de autoguardado en segundos."""
         self.autosave_value_label.setText(f"{value / 1000:.1f} s")
 
     def _on_autosave_slider_changed(self, value: int):
+        """Actualiza el retardo guardado al mover el control."""
         self._update_autosave_label(value)
         if self._loading:
             return
         settings.autosave_interval_ms = value
 
     def _on_reading_speed_changed(self, value: int):
+        """Guarda la velocidad de lectura configurada."""
         if self._loading:
             return
         settings.reading_speed_wpm = value
 
     def _on_confirm_delete_toggled(self, checked: bool):
+        """Guarda si se debe confirmar antes de eliminar elementos."""
         if self._loading:
             return
         settings.confirm_before_delete = checked
 
     def _on_font_family_changed(self, family: str):
+        """Guarda la familia tipográfica elegida para el editor."""
         if self._loading or not family:
             return
         settings.editor_font_family = family
 
     def _on_font_size_changed(self, value: int):
+        """Guarda el tamaño de fuente configurado para el editor."""
         if self._loading:
             return
         settings.editor_font_size = value
 
     def _on_reset_defaults(self):
+        """Restaura las preferencias predeterminadas y recarga los controles."""
         settings.reset_to_defaults()
         self._load_values()
 
@@ -416,12 +427,15 @@ class SettingsPanel(QWidget):
     # Datos
     # ------------------------------------------------------------------ #
     def _data_dir(self) -> str:
+        """Devuelve la carpeta que contiene el archivo de base de datos."""
         return os.path.dirname(os.path.abspath(self.db.path))
 
     def _open_data_folder(self):
+        """Abre en el sistema la carpeta de datos de Pluma."""
         QDesktopServices.openUrl(QUrl.fromLocalFile(self._data_dir()))
 
     def _create_backup(self):
+        """Solicita una ruta y crea una copia de seguridad de la base de datos."""
         default_name = f"pluma-copia-{time.strftime('%Y%m%d-%H%M%S')}.db"
         dest_path, _ = QFileDialog.getSaveFileName(
             self, "Guardar copia de seguridad", os.path.join(self._data_dir(), default_name),
@@ -439,6 +453,7 @@ class SettingsPanel(QWidget):
         self.backup_status_label.setText(f"Copia guardada en {dest_path}")
 
     def _restore_backup(self):
+        """Restaura la copia tras crear un respaldo y avisa a la aplicación si tiene éxito."""
         src_path, _ = QFileDialog.getOpenFileName(
             self, "Seleccionar copia de seguridad", self._data_dir(), BACKUP_FILTER,
         )
@@ -474,4 +489,5 @@ class SettingsPanel(QWidget):
     # Interfaz esperada por MainWindow (no depende de un proyecto)
     # ------------------------------------------------------------------ #
     def load_project(self, project_id):
+        """No hace nada: los ajustes son globales y no dependen del proyecto."""
         pass

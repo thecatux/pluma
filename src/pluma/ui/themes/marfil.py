@@ -93,12 +93,14 @@ DARK = {**_ROLES,
 
 
 def _rounded(rect: QRectF, radius: float) -> QPainterPath:
+    """Crea un QPainterPath de rectángulo redondeado para recorte o trazo."""
     path = QPainterPath()
     path.addRoundedRect(rect, radius, radius)
     return path
 
 
 def _tone(r: int, g: int, b: int, alpha: float) -> QColor:
+    """Crea un QColor a partir de componentes RGB enteros y una opacidad decimal (0.0–1.0)."""
     color = QColor(r, g, b)
     color.setAlphaF(max(0.0, min(1.0, alpha)))
     return color

@@ -17,6 +17,7 @@ configure_error_logging()
 
 
 def main():
+    """Inicializa la aplicación Qt, la base de datos y la ventana principal."""
     from PySide6.QtWidgets import QApplication
 
     from pluma.core.db import Database

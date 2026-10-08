@@ -18,7 +18,10 @@ from pluma.ui.editor_widget import RichTextEditor
 
 
 class NotesPanel(QWidget):
+    """Panel para organizar notas libres con contenido enriquecido."""
+
     def __init__(self, db, parent=None):
+        """Construye la lista de notas y el editor asociado."""
         super().__init__(parent)
         self.db = db
         self.project_id = None
@@ -45,13 +48,16 @@ class NotesPanel(QWidget):
         theme.signals.changed.connect(self._apply_empty_state_theme)
 
     def _apply_settings(self):
+        """Actualiza el retardo del temporizador de autoguardado."""
         self._save_timer.setInterval(settings.autosave_interval_ms)
 
     def _apply_empty_state_theme(self, *_args):
+        """Actualiza el icono del estado vacío con el tema activo."""
         self.empty_icon_label.setPixmap(icons.pixmap("note", theme.colors()["text_muted"], size=52))
 
     # ------------------------------------------------------------------ #
     def _build_list_column(self) -> QWidget:
+        """Construye la lista reordenable y las acciones sobre las notas."""
         left = QWidget()
         left_layout = QVBoxLayout(left)
         left_layout.setContentsMargins(14, 16, 10, 14)
@@ -87,12 +93,14 @@ class NotesPanel(QWidget):
         return left
 
     def _build_editor_column(self) -> QWidget:
+        """Apila el estado vacío y el editor de notas."""
         self.right_stack = QStackedWidget()
         self.right_stack.addWidget(self._build_empty_state_widget())
         self.right_stack.addWidget(self._build_editor_widget())
         return self.right_stack
 
     def _build_empty_state_widget(self) -> QWidget:
+        """Construye la vista mostrada cuando el proyecto no tiene notas."""
         empty = QWidget()
         layout = QVBoxLayout(empty)
         layout.addStretch(1)
@@ -121,6 +129,7 @@ class NotesPanel(QWidget):
         return empty
 
     def _build_editor_widget(self) -> QWidget:
+        """Construye los controles de título y el editor de texto enriquecido."""
         right = QWidget()
         right_layout = QVBoxLayout(right)
         right_layout.setContentsMargins(28, 22, 28, 16)
@@ -159,12 +168,14 @@ class NotesPanel(QWidget):
         return right
 
     def load_project(self, project_id: int):
+        """Guarda cambios pendientes y carga las notas del proyecto."""
         self._flush_pending_save()
         self.project_id = project_id
         self._current_note_id = None
         self._reload_list()
 
     def _reload_list(self, select_id=None):
+        """Recarga las notas y selecciona la indicada, si sigue disponible."""
         self._loading = True
         self.list_widget.clear()
         notes = self.db.list_notes(self.project_id) if self.project_id else []
@@ -186,6 +197,7 @@ class NotesPanel(QWidget):
             self.updated_label.setText("")
 
     def _on_selection_changed(self, current, previous):
+        """Guarda la nota anterior y carga la nota seleccionada."""
         if self._loading:
             return
         self._flush_pending_save()
@@ -196,6 +208,7 @@ class NotesPanel(QWidget):
         self._load_note(current.data(Qt.UserRole))
 
     def _on_rows_moved(self, *_args):
+        """Persiste el orden de las notas después de arrastrarlas."""
         if self._loading or self.project_id is None:
             return
         ordered_ids = [
@@ -206,6 +219,7 @@ class NotesPanel(QWidget):
         self._reload_list(select_id=self._current_note_id)
 
     def _load_note(self, note_id: int):
+        """Carga el título, el contenido y la fecha de edición de una nota."""
         row = self.db.get_note(note_id)
         if row is None:
             return
@@ -219,15 +233,18 @@ class NotesPanel(QWidget):
         self.remove_button.setEnabled(True)
 
     def _show_empty_state(self):
+        """Muestra el estado vacío y deshabilita la acción de eliminar."""
         self.right_stack.setCurrentIndex(0)
         self.remove_button.setEnabled(False)
 
     def _schedule_save(self):
+        """Reinicia el temporizador si hay una nota activa y no se está cargando."""
         if self._loading or self._current_note_id is None:
             return
         self._save_timer.start()
 
     def _on_title_edited(self, text):
+        """Sincroniza el título de la lista y programa el guardado."""
         if self._current_note_id is None:
             return
         current_item = self.list_widget.currentItem()
@@ -236,6 +253,7 @@ class NotesPanel(QWidget):
         self._schedule_save()
 
     def _save_current_note(self):
+        """Guarda el título y el HTML de la nota activa y actualiza su fecha."""
         if self._current_note_id is None:
             return
         self.db.update_note(
@@ -248,11 +266,13 @@ class NotesPanel(QWidget):
             self.updated_label.setText(f"Última edición: {row['updated_at']}")
 
     def _flush_pending_save(self):
+        """Completa inmediatamente el guardado pendiente, si existe."""
         if self._save_timer.isActive():
             self._save_timer.stop()
             self._save_current_note()
 
     def add_note(self):
+        """Crea una nota y enfoca su campo de título."""
         if self.project_id is None:
             return
         self._flush_pending_save()
@@ -263,6 +283,7 @@ class NotesPanel(QWidget):
         self.title_edit.selectAll()
 
     def remove_current_note(self):
+        """Elimina la nota activa, con confirmación si está configurada."""
         if self._current_note_id is None:
             return
         if settings.confirm_before_delete:

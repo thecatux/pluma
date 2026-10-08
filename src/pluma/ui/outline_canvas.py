@@ -50,6 +50,7 @@ NO_GROUP_LABEL = "Sin grupo"
 
 
 def color_for_group(group_name: str) -> str:
+    """Devuelve un color hexadecimal determinista asociado al nombre del grupo."""
     if not group_name:
         return NO_GROUP_COLOR
     return GROUP_COLORS[sum(ord(ch) for ch in group_name) % len(GROUP_COLORS)]
@@ -67,6 +68,7 @@ _PAL = None
 
 
 def _reset_palette(*_args):
+    """Invalida la caché de la paleta al cambiar de tema."""
     global _PAL
     _PAL = None
 
@@ -75,6 +77,7 @@ theme.signals.changed.connect(_reset_palette)
 
 
 def palette_colors() -> dict:
+    """Devuelve la paleta de colores del lienzo adaptada al tema activo."""
     global _PAL
     if _PAL is None:
         c = theme.colors()
@@ -99,6 +102,7 @@ def palette_colors() -> dict:
 
 
 def _with_alpha(color: QColor, alpha: int) -> QColor:
+    """Devuelve una copia del color proporcionado con el nivel de opacidad alfa indicado."""
     c = QColor(color)
     c.setAlpha(alpha)
     return c
@@ -106,6 +110,7 @@ def _with_alpha(color: QColor, alpha: int) -> QColor:
 
 @lru_cache(maxsize=64)
 def _icon_pixmap(name: str, color_hex: str, size: int):
+    """Crea y cachea pixmaps de iconos vectoriales para el renderizado del lienzo."""
     return icons.pixmap(name, color_hex, size)
 
 
@@ -139,6 +144,7 @@ def wrap_text(text: str, font: QFont, width: float, max_lines: int) -> list[str]
 # Evento
 # ---------------------------------------------------------------------- #
 class EventItem(QGraphicsObject):
+    """Elemento gráfico interactivo que representa un bloque o evento en la línea temporal."""
     dragging = Signal(object)          # mientras se arrastra
     dragFinished = Signal(object)      # al soltar tras un arrastre real
     activated = Signal(object)         # doble clic
@@ -155,6 +161,7 @@ class EventItem(QGraphicsObject):
     exporting = False  # True mientras se exporta a imagen (sin selección)
 
     def __init__(self, block: dict, chapter_title: str = ""):
+        """Inicializa el elemento gráfico del evento con sus metadatos y fuentes tipográficas."""
         super().__init__()
         self.block = block
         self.chapter_title = chapter_title
@@ -179,22 +186,27 @@ class EventItem(QGraphicsObject):
 
     # -- API -------------------------------------------------------------- #
     def refresh(self):
+        """Recalcula las líneas de texto y dimensiones visuales de la tarjeta."""
         self._relayout_text()
 
     def configure(self, side: int, stem: float, axis_date: bool, free_y: bool):
+        """Configura la posición relativa de la tarjeta respecto al eje o carril."""
         self.free_y = free_y
         if (side, stem, axis_date) != (self.side, self.stem, self.axis_date):
             self.side, self.stem, self.axis_date = side, stem, axis_date
             self._relayout_text()
 
     def set_dimmed(self, dimmed: bool):
+        """Atenúa la opacidad del elemento cuando no coincide con los filtros activos."""
         self.setOpacity(0.22 if dimmed else 1.0)
 
     @property
     def card_height(self) -> float:
+        """Devuelve la altura calculada de la tarjeta."""
         return self._h
 
     def animate_to(self, pos: QPointF, duration: int = 200):
+        """Desplaza suavemente el elemento a una nueva posición mediante una animación."""
         if self._anim is None:
             self._anim = QPropertyAnimation(self, b"pos")
             self._anim.setEasingCurve(QEasingCurve.OutCubic)
@@ -208,11 +220,13 @@ class EventItem(QGraphicsObject):
         self._anim.start()
 
     def stop_animation(self):
+        """Detiene cualquier animación de movimiento en curso."""
         if self._anim is not None:
             self._anim.stop()
 
     # -- geometría ------------------------------------------------------- #
     def _relayout_text(self):
+        """Calcula las líneas formateadas y la altura total de la tarjeta a partir de sus datos."""
         self.prepareGeometryChange()
         b = self.block
         base = QApplication.font()
@@ -253,23 +267,28 @@ class EventItem(QGraphicsObject):
         self.update()
 
     def _inner_w(self) -> float:
+        """Anchura interior disponible para el texto dentro de la tarjeta."""
         return self.CARD_W - self.ACCENT_W - self.PAD * 2
 
     def _node_r(self) -> float:
+        """Radio del círculo del nodo, ampliado si es un hito."""
         return self.MILESTONE_R if self._milestone else self.NODE_R
 
     def _card_rect(self) -> QRectF:
+        """Rectángulo delimitador de la tarjeta respecto al origen local del evento."""
         if self.side > 0:
             return QRectF(-self.CARD_W / 2, self.stem, self.CARD_W, self._h)
         return QRectF(-self.CARD_W / 2, -self.stem - self._h, self.CARD_W, self._h)
 
     def _axis_date_rect(self) -> QRectF:
+        """Rectángulo de dibujo para la etiqueta de fecha situada junto al eje."""
         r = self._node_r()
         h = self._lh_small + 2
         y = -r - 6 - h if self.side > 0 else r + 6
         return QRectF(-self.AXIS_DATE_W / 2, y, self.AXIS_DATE_W, h)
 
     def boundingRect(self) -> QRectF:
+        """Define el área envolvente total ocupada por el nodo, tallo, tarjeta y fechas."""
         r = self._node_r()
         rect = self._card_rect().united(QRectF(-r - 4, -r - 4, 2 * r + 8, 2 * r + 8))
         if self.axis_date and self._date:
@@ -277,6 +296,7 @@ class EventItem(QGraphicsObject):
         return rect.adjusted(-8, -8, 8, 8)
 
     def shape(self) -> QPainterPath:
+        """Define la forma precisa para detección de colisiones y clics."""
         path = QPainterPath()
         path.addRoundedRect(self._card_rect(), 10, 10)
         r = self._node_r() + 2
@@ -285,6 +305,7 @@ class EventItem(QGraphicsObject):
 
     # -- pintado ----------------------------------------------------------- #
     def paint(self, p: QPainter, option, widget=None):
+        """Dibuja el nodo en el eje, el tallo conector, la tarjeta y sus textos."""
         pal = palette_colors()
         color = QColor(block_color(self.block))
         selected = self.isSelected() and not EventItem.exporting
@@ -397,14 +418,17 @@ class EventItem(QGraphicsObject):
 
     # -- interacción --------------------------------------------------------#
     def hoverEnterEvent(self, event):
+        """Activa el resaltado de borde al pasar el ratón."""
         self._hover = True
         self.update()
 
     def hoverLeaveEvent(self, event):
+        """Desactiva el resaltado de borde al retirar el ratón."""
         self._hover = False
         self.update()
 
     def itemChange(self, change, value):
+        """Restringe el movimiento en el eje Y según el modo y emite señales de arrastre."""
         if change == QGraphicsItem.ItemPositionChange and self._pressing and not self.free_y:
             return QPointF(value.x(), self.home.y())
         if change == QGraphicsItem.ItemPositionHasChanged and self._dragging:
@@ -412,6 +436,7 @@ class EventItem(QGraphicsObject):
         return super().itemChange(change, value)
 
     def mousePressEvent(self, event):
+        """Inicia el seguimiento para posible arrastre o selección."""
         if event.button() == Qt.LeftButton:
             event.setModifiers(Qt.NoModifier)  # un solo evento seleccionado/arrastrado a la vez
             self.stop_animation()
@@ -421,6 +446,7 @@ class EventItem(QGraphicsObject):
         super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event):
+        """Detecta el umbral de arrastre y activa el cursor de agarre."""
         if self._pressing and not self._dragging:
             if (event.scenePos() - self._press_scene).manhattanLength() > QApplication.startDragDistance():
                 self._dragging = True
@@ -429,6 +455,7 @@ class EventItem(QGraphicsObject):
         super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event):
+        """Finaliza el arrastre notificando la nueva posición o restaurando la posición original."""
         super().mouseReleaseEvent(event)
         if event.button() != Qt.LeftButton:
             return
@@ -443,10 +470,12 @@ class EventItem(QGraphicsObject):
             self.setPos(self.home)  # un simple clic no debe desplazar el bloque
 
     def mouseDoubleClickEvent(self, event):
+        """Emite la señal de activación para abrir el editor del evento."""
         self.activated.emit(self)
         event.accept()
 
     def contextMenuEvent(self, event):
+        """Emite la solicitud de menú contextual."""
         self.setSelected(True)
         self.contextRequested.emit(self, event.screenPos())
         event.accept()
@@ -456,8 +485,11 @@ class EventItem(QGraphicsObject):
 # Línea (eje principal o carril)
 # ---------------------------------------------------------------------- #
 class TrackItem(QGraphicsItem):
+    """Elemento gráfico que dibuja el eje central o los carriles de grupo con sus etiquetas."""
+
     def __init__(self, x0, x1, y=0.0, label="", color=None, band_h=0.0, arrow=False,
                  thickness=3.0, band_top=34.0):
+        """Inicializa el trazado de la línea o carril."""
         super().__init__()
         self.x0, self.x1, self.y = x0, x1, y
         self.label = label
@@ -470,11 +502,13 @@ class TrackItem(QGraphicsItem):
         self.setZValue(-1)
 
     def boundingRect(self) -> QRectF:
+        """Devuelve el área que encierra la línea o la banda del carril."""
         if self.band_h:
             return QRectF(self.x0, self.y - self.band_top, self.x1 - self.x0, self.band_h)
         return QRectF(self.x0 - 8, self.y - 12, self.x1 - self.x0 + 30, 24)
 
     def paint(self, p: QPainter, option, widget=None):
+        """Dibuja la línea, punta de flecha opcional y etiqueta del grupo."""
         pal = palette_colors()
         p.setRenderHint(QPainter.Antialiasing)
         if self.band_h:
@@ -512,10 +546,12 @@ class TrackItem(QGraphicsItem):
 # Botón "+" entre dos nodos
 # ---------------------------------------------------------------------- #
 class GapHandle(QGraphicsObject):
+    """Botón '+' interactivo situado entre dos nodos contiguos para insertar un evento intermedio."""
     clicked = Signal(int)
     R = 10
 
     def __init__(self, index: int, x: float):
+        """Inicializa el botón de inserción en el índice especificado."""
         super().__init__()
         self.index = index
         self.setPos(x, 0)
@@ -525,15 +561,19 @@ class GapHandle(QGraphicsObject):
         self.setOpacity(0.3)
 
     def boundingRect(self) -> QRectF:
+        """Devuelve el área circular envolvente del botón."""
         return QRectF(-self.R - 2, -self.R - 2, 2 * self.R + 4, 2 * self.R + 4)
 
     def hoverEnterEvent(self, event):
+        """Aumenta la opacidad al pasar el ratón sobre el botón."""
         self.setOpacity(1.0)
 
     def hoverLeaveEvent(self, event):
+        """Restaura la opacidad atenuada al retirar el ratón."""
         self.setOpacity(0.3)
 
     def paint(self, p: QPainter, option, widget=None):
+        """Dibuja el círculo y el signo más."""
         if EventItem.exporting:
             return
         pal = palette_colors()
@@ -545,9 +585,11 @@ class GapHandle(QGraphicsObject):
         p.drawLine(QPointF(0, -4), QPointF(0, 4))
 
     def mousePressEvent(self, event):
+        """Acepta el clic de ratón."""
         event.accept()
 
     def mouseReleaseEvent(self, event):
+        """Emite la señal de clic si se soltó dentro del botón."""
         if event.button() == Qt.LeftButton and self.contains(event.pos()):
             index = self.index
             QTimer.singleShot(0, lambda: self.clicked.emit(index))
@@ -559,6 +601,7 @@ class GapHandle(QGraphicsObject):
 # ====================================================================== #
 
 class TimelineInspector(QFrame):
+    """Panel lateral desplegable para editar las propiedades y notas del evento seleccionado."""
     liveChanged = Signal(int, dict)
     saveRequested = Signal(int, dict)
     deleteRequested = Signal(int)
@@ -569,6 +612,7 @@ class TimelineInspector(QFrame):
     SWATCH = 18
 
     def __init__(self, parent=None):
+        """Construye el panel inspector con sus campos de edición y paleta de colores."""
         super().__init__(parent)
         self.setObjectName("TimelineInspector")
         self.setFixedWidth(self.WIDTH)
@@ -655,11 +699,13 @@ class TimelineInspector(QFrame):
     # -- construcción ---------------------------------------------------- #
     @staticmethod
     def _caption(text: str) -> QLabel:
+        """Crea una etiqueta de título de sección para el formulario del inspector."""
         label = QLabel(text)
         label.setObjectName("InspectorCaption")
         return label
 
     def _build_swatches(self) -> QHBoxLayout:
+        """Construye la fila de botones de muestra de color (automático, paleta y personalizado)."""
         row = QHBoxLayout()
         row.setSpacing(4)
         self.auto_btn = QPushButton("Auto")
@@ -688,6 +734,7 @@ class TimelineInspector(QFrame):
         return row
 
     def _apply_theme(self, *_args):
+        """Aplica la hoja de estilos y los iconos temáticos al inspector."""
         c = theme.colors()
         self.setStyleSheet(
             f"#TimelineInspector {{ background: {c['card_glass']}; border: none; border-left: 1px solid {c['glass_border']}; }} "
@@ -702,12 +749,14 @@ class TimelineInspector(QFrame):
         self._refresh_custom_button()
 
     def _swatch_css(self, fill: str, c: dict) -> str:
+        """Genera el CSS para un botón circular de muestra de color."""
         return (f"QPushButton {{ background: {fill}; border: 2px solid transparent; border-radius: {self.SWATCH // 2}px; "
                 f"padding: 0; min-width: 0; min-height: 0; }}"
                 f"QPushButton:checked {{ border: 2px solid {c['text']}; }}")
 
     # -- datos --------------------------------------------------------------#
     def show_block(self, block: dict, known_groups: list[str], chapters: list[tuple[int, str]]):
+        """Carga los datos de un bloque en los controles del formulario."""
         self.flush_pending_save()
         self._loading = True
         self._block_id = block["id"]
@@ -735,18 +784,22 @@ class TimelineInspector(QFrame):
         self._loading = False
 
     def clear(self):
+        """Vuelca guardados pendientes y desvincula el bloque activo."""
         self.flush_pending_save()
         self._block_id = None
 
     def focus_title(self):
+        """Otorga el foco al campo de edición de título seleccionando todo el texto."""
         self.title_edit.setFocus()
         self.title_edit.selectAll()
 
     def current_block_id(self):
+        """Devuelve el identificador del bloque actualmente mostrado en el inspector."""
         return self._block_id
 
     # -- color ----------------------------------------------------------------#
     def _set_color(self, value: str):
+        """Actualiza el estado visual de los botones de color con el valor hexadecimal dado."""
         self._color = value
         self.auto_btn.setChecked(value == "")
         for btn, hex_color in self._swatches:
@@ -754,6 +807,7 @@ class TimelineInspector(QFrame):
         self._refresh_custom_button()
 
     def _refresh_custom_button(self):
+        """Actualiza el botón de color personalizado si se seleccionó un color fuera de la paleta estándar."""
         c = theme.colors()
         palette = {h.lower() for h in GROUP_COLORS}
         is_custom = bool(self._color) and self._color.lower() not in palette
@@ -769,10 +823,12 @@ class TimelineInspector(QFrame):
                 f"border-radius: {self.SWATCH // 2}px; padding: 0; min-width: 0; min-height: 0; }}")
 
     def _pick_color(self, value: str):
+        """Establece un nuevo color y notifica la edición."""
         self._set_color(value)
         self._on_edited()
 
     def _pick_custom_color(self):
+        """Abre un diálogo selector de color para asignar un tono personalizado."""
         initial = QColor(self._color) if self._color else QColor(GROUP_COLORS[0])
         chosen = QColorDialog.getColor(initial, self, "Color del evento")
         if chosen.isValid():
@@ -782,6 +838,7 @@ class TimelineInspector(QFrame):
 
     # -- emisión -------------------------------------------------------------#
     def _fields(self) -> dict:
+        """Extrae el diccionario con los valores actuales de todos los controles del inspector."""
         return {
             "title": self.title_edit.text(),
             "date_label": self.date_edit.text().strip(),
@@ -793,12 +850,14 @@ class TimelineInspector(QFrame):
         }
 
     def _on_edited(self, *_args):
+        """Emite actualizaciones en tiempo real y reinicia el temporizador de autoguardado."""
         if self._loading or self._block_id is None:
             return
         self.liveChanged.emit(self._block_id, self._fields())
         self._save_timer.start()
 
     def _save(self):
+        """Emite la solicitud formal de guardado del bloque activo."""
         if self._block_id is None:
             return
         fields = self._fields()
@@ -806,11 +865,13 @@ class TimelineInspector(QFrame):
         self.saveRequested.emit(self._block_id, fields)
 
     def flush_pending_save(self):
+        """Ejecuta de inmediato cualquier guardado pendiente antes de cambiar de elemento."""
         if self._save_timer.isActive():
             self._save_timer.stop()
             self._save()
 
     def _emit_for_block(self, signal):
+        """Vuelca guardados pendientes y emite una señal asociada al bloque activo."""
         if self._block_id is not None:
             self.flush_pending_save()
             signal.emit(self._block_id)
@@ -818,6 +879,7 @@ class TimelineInspector(QFrame):
 
 @lru_cache(maxsize=64)
 def _dot_icon(color_hex: str, d: int = 10) -> QIcon:
+    """Crea y cachea un icono circular de color para los chips de filtro por grupo."""
     pm = QPixmap(d * 2, d * 2)
     pm.fill(Qt.transparent)
     p = QPainter(pm)
@@ -834,6 +896,7 @@ def _dot_icon(color_hex: str, d: int = 10) -> QIcon:
 # Vista
 # ---------------------------------------------------------------------- #
 class TimelineView(QGraphicsView):
+    """Vista de gráficos interactiva con soporte de zoom, arrastre y navegación por teclado."""
     zoomChanged = Signal(float)
     keyAction = Signal(str)
     backgroundDoubleClicked = Signal(QPointF)
@@ -843,6 +906,7 @@ class TimelineView(QGraphicsView):
     MAX_ZOOM = 2.5
 
     def __init__(self, scene, parent=None):
+        """Inicializa la vista del lienzo con renderizado suavizado y arrastre manual."""
         super().__init__(scene, parent)
         self._zoom = 1.0
         self.horizontal_wheel = True
@@ -856,9 +920,11 @@ class TimelineView(QGraphicsView):
     # -- zoom ---------------------------------------------------------------#
     @property
     def zoom(self) -> float:
+        """Nivel actual de ampliación de la vista."""
         return self._zoom
 
     def set_zoom(self, value: float):
+        """Ajusta el zoom a un valor absoluto dentro de los límites permitidos."""
         value = max(self.MIN_ZOOM, min(self.MAX_ZOOM, value))
         self.resetTransform()
         self.scale(value, value)
@@ -866,6 +932,7 @@ class TimelineView(QGraphicsView):
         self.zoomChanged.emit(value)
 
     def zoom_by(self, factor: float, under_mouse: bool = False):
+        """Multiplica el zoom actual por un factor de escala."""
         target = max(self.MIN_ZOOM, min(self.MAX_ZOOM, self._zoom * factor))
         factor = target / self._zoom
         if abs(factor - 1) < 1e-6:
@@ -878,17 +945,20 @@ class TimelineView(QGraphicsView):
         self.zoomChanged.emit(target)
 
     def reset_zoom(self):
+        """Restaura el nivel de zoom al 100% manteniendo el centro de la escena."""
         center = self.mapToScene(self.viewport().rect().center())
         self.set_zoom(1.0)
         self.centerOn(center)
 
     def fit_rect(self, rect: QRectF, max_zoom: float = 1.0):
+        """Ajusta la vista para que el rectángulo de contenido quepa completamente en pantalla."""
         vw, vh = max(self.viewport().width(), 1), max(self.viewport().height(), 1)
         z = min(vw / max(rect.width(), 1), vh / max(rect.height(), 1))
         self.set_zoom(min(z, max_zoom))
         self.centerOn(rect.center())
 
     def fit_zoom_for(self, rect: QRectF) -> float:
+        """Calcula el factor de zoom necesario para abarcar el rectángulo dado."""
         vw, vh = max(self.viewport().width(), 1), max(self.viewport().height(), 1)
         return min(vw / max(rect.width(), 1), vh / max(rect.height(), 1))
 
@@ -905,9 +975,11 @@ class TimelineView(QGraphicsView):
 
     # -- eventos ----------------------------------------------------------- #
     def _interactive_at(self, pos) -> bool:
+        """Comprueba si hay elementos interactivos (eventos o botones de inserción) bajo la posición dada."""
         return any(isinstance(i, (EventItem, GapHandle)) for i in self.items(pos))
 
     def wheelEvent(self, event):
+        """Maneja el zoom con Ctrl+rueda o desplazamiento horizontal con la rueda del ratón."""
         if event.modifiers() & Qt.ControlModifier:
             delta = event.angleDelta().y() or event.pixelDelta().y()
             if delta:
@@ -923,6 +995,7 @@ class TimelineView(QGraphicsView):
         super().wheelEvent(event)
 
     def mouseDoubleClickEvent(self, event):
+        """Emite la señal de doble clic en el fondo para crear un nuevo evento."""
         if event.button() == Qt.LeftButton and not self._interactive_at(event.position().toPoint()):
             self.backgroundDoubleClicked.emit(self.mapToScene(event.position().toPoint()))
             event.accept()
@@ -930,6 +1003,7 @@ class TimelineView(QGraphicsView):
         super().mouseDoubleClickEvent(event)
 
     def contextMenuEvent(self, event):
+        """Abre el menú contextual de fondo si no se hizo clic sobre un elemento."""
         if self._interactive_at(event.pos()):
             super().contextMenuEvent(event)
             return
@@ -937,6 +1011,7 @@ class TimelineView(QGraphicsView):
         event.accept()
 
     def keyPressEvent(self, event):
+        """Procesa atajos de teclado para navegación, eliminación y duplicación de eventos."""
         k, m = event.key(), event.modifiers()
         ctrl, alt = bool(m & Qt.ControlModifier), bool(m & Qt.AltModifier)
         action = None
@@ -965,6 +1040,7 @@ class TimelineView(QGraphicsView):
         super().keyPressEvent(event)
 
     def drawBackground(self, painter, rect):
+        """Dibuja el fondo con patrón de cuadrícula de puntos adaptado al tema."""
         pal = palette_colors()
         painter.fillRect(rect, pal["background"])
         if self._zoom < 0.5:
@@ -992,6 +1068,7 @@ class TimelineView(QGraphicsView):
 # Lienzo completo (barra + vista + inspector)
 # ---------------------------------------------------------------------- #
 class TimelineCanvas(QWidget):
+    """Widget integral de la línea temporal que combina la barra superior, el lienzo y el inspector."""
     addRequested = Signal(int, str)        # (posición de inserción, grupo inicial)
     blockChanged = Signal(int, dict)
     blockDeleteRequested = Signal(int)
@@ -1005,6 +1082,7 @@ class TimelineCanvas(QWidget):
     LANE_TOP = 34
 
     def __init__(self, parent=None):
+        """Inicializa el componente del lienzo completo conectando señales de vista e inspector."""
         super().__init__(parent)
         self._blocks: list[dict] = []
         self._items: dict[int, EventItem] = {}
@@ -1056,6 +1134,7 @@ class TimelineCanvas(QWidget):
     # Barra superior
     # ------------------------------------------------------------------ #
     def _tool_button(self, icon_name, tooltip, checkable=False) -> QPushButton:
+        """Crea y registra un botón para la barra superior del lienzo."""
         btn = QPushButton()
         btn.setProperty("variant", "icon")
         btn.setProperty("icon_name", icon_name)
@@ -1067,6 +1146,7 @@ class TimelineCanvas(QWidget):
         return btn
 
     def _build_toolbar(self) -> QWidget:
+        """Construye la barra superior con buscador, modos, zoom y exportación."""
         box = QWidget()
         v = QVBoxLayout(box)
         v.setContentsMargins(14, 10, 14, 6)
@@ -1138,6 +1218,7 @@ class TimelineCanvas(QWidget):
         return box
 
     def _apply_theme(self, *_args):
+        """Aplica estilos e iconos del tema activo a la barra y vista del lienzo."""
         c = theme.colors()
         css = (f"QPushButton {{ border: 1px solid {c['glass_border']}; border-top-color: {c['rim_top']}; "
                f"border-radius: 6px; background: {c['button_glass']}; color: {c['text_secondary']}; }} "
@@ -1154,6 +1235,7 @@ class TimelineCanvas(QWidget):
         self.view.viewport().update()
 
     def _refresh_mode_icons(self):
+        """Actualiza los iconos de alternancia entre vista en línea y vista por carriles."""
         c = theme.colors()
         for btn in (self.line_btn, self.lanes_btn):
             color = c["primary"] if btn.isChecked() else c["text_secondary"]
@@ -1163,6 +1245,7 @@ class TimelineCanvas(QWidget):
     # Sincronización con la base de datos
     # ------------------------------------------------------------------ #
     def set_blocks(self, rows, chapters=None, reset_view=False):
+        """Carga la lista de bloques en el lienzo y regenera los elementos visuales."""
         self.inspector.clear()
         selected_id = self.selected_id()
         if chapters is not None:
@@ -1194,6 +1277,7 @@ class TimelineCanvas(QWidget):
 
     @staticmethod
     def _normalize(row) -> dict:
+        """Asegura que el diccionario de bloque contenga todos los campos obligatorios."""
         d = dict(row)
         d.setdefault("color", "")
         d.setdefault("is_milestone", 0)
@@ -1201,15 +1285,18 @@ class TimelineCanvas(QWidget):
         return d
 
     def set_chapters(self, chapters):
+        """Actualiza la lista de capítulos disponibles para vincular con eventos."""
         self._chapters = list(chapters)
 
     def _chapter_title(self, chapter_id) -> str:
+        """Busca el título de un capítulo por su identificador numérico."""
         for cid, title in self._chapters:
             if cid == chapter_id:
                 return title or ""
         return ""
 
     def _make_item(self, block) -> EventItem:
+        """Instancia un nuevo EventItem conectando sus señales interactivas."""
         item = EventItem(block, self._chapter_title(block.get("chapter_id")))
         item.dragging.connect(self._on_item_dragging)
         item.dragFinished.connect(self._on_item_drag_finished)
@@ -1220,18 +1307,22 @@ class TimelineCanvas(QWidget):
         return item
 
     def flush_pending_saves(self):
+        """Vuelca cualquier edición pendiente del inspector en la base de datos."""
         self.inspector.flush_pending_save()
 
     def _ordered_items(self) -> list[EventItem]:
+        """Devuelve los elementos EventItem ordenados según el orden actual de self._blocks."""
         return [self._items[b["id"]] for b in self._blocks if b["id"] in self._items]
 
     def _group_names(self) -> list[str]:
+        """Devuelve los nombres únicos de grupos ordenados alfabéticamente."""
         return sorted({(b["group_name"] or "").strip() for b in self._blocks if (b["group_name"] or "").strip()})
 
     # ------------------------------------------------------------------ #
     # Disposición
     # ------------------------------------------------------------------ #
     def _set_mode(self, mode: str):
+        """Cambia el modo de disposición (línea o carriles) y reordena la escena."""
         self.line_btn.setChecked(mode == "line")
         self.lanes_btn.setChecked(mode == "lanes")
         self._refresh_mode_icons()
@@ -1243,6 +1334,7 @@ class TimelineCanvas(QWidget):
         self._schedule_initial_view()
 
     def _place(self, item: EventItem, pos: QPointF, animate: bool):
+        """Asigna la posición de destino a un elemento con o sin animación."""
         item.home = pos
         if animate:
             item.animate_to(pos)
@@ -1251,6 +1343,7 @@ class TimelineCanvas(QWidget):
             item.setPos(pos)
 
     def _relayout(self, animate=False):
+        """Reconstruye los elementos decorativos y reposiciona todos los bloques."""
         for d in self._decor:
             if d.scene() is self.scene:
                 self.scene.removeItem(d)
@@ -1263,10 +1356,12 @@ class TimelineCanvas(QWidget):
         self._update_scene_rect(items)
 
     def _add_decor(self, item):
+        """Añade un elemento decorativo (línea, carril, botón +) a la escena."""
         self.scene.addItem(item)
         self._decor.append(item)
 
     def _layout_line(self, items, animate):
+        """Distribuye los eventos a lo largo de un único eje horizontal alternando arriba y abajo."""
         step, n = self.STEP_LINE, len(items)
         self._lane_names = []
         for i, it in enumerate(items):
@@ -1282,6 +1377,7 @@ class TimelineCanvas(QWidget):
         self._add_empty_hint(n, QPointF(x0 + 40, -70))
 
     def _layout_lanes(self, items, animate):
+        """Distribuye los eventos en múltiples carriles horizontales según su grupo."""
         step, n = self.STEP_LANES, len(items)
         for it in items:
             it.configure(side=1, stem=self.STEM_LANES, axis_date=False, free_y=True)
@@ -1311,6 +1407,7 @@ class TimelineCanvas(QWidget):
         self._add_empty_hint(n, QPointF(x0 + 120, 20))
 
     def _add_empty_hint(self, n, pos):
+        """Muestra un mensaje de ayuda cuando el lienzo no contiene ningún evento."""
         if n:
             return
         hint = QGraphicsSimpleTextItem("Aún no hay eventos.\nHaz doble clic en el lienzo o pulsa «Añadir evento».")
@@ -1320,6 +1417,7 @@ class TimelineCanvas(QWidget):
         self._add_decor(hint)
 
     def _update_scene_rect(self, items):
+        """Recalcula y ajusta el área total de la escena para incluir todos los elementos con margen."""
         rect = QRectF()
         for it in items:
             rect = rect.united(it.boundingRect().translated(it.home))
@@ -1335,11 +1433,13 @@ class TimelineCanvas(QWidget):
     # Vista: zoom, ajuste, exportación
     # ------------------------------------------------------------------ #
     def _schedule_initial_view(self):
+        """Programa el encuadre inicial de la escena."""
         self._initial_view_pending = True
         if self.isVisible():
             QTimer.singleShot(0, self._apply_initial_view)
 
     def showEvent(self, event):
+        """Aplica la vista guardada o inicial cuando el widget se hace visible."""
         super().showEvent(event)
         if self._saved_view_state is not None:
             QTimer.singleShot(0, self._apply_saved_view)
@@ -1347,6 +1447,7 @@ class TimelineCanvas(QWidget):
             QTimer.singleShot(0, self._apply_initial_view)
 
     def restore_view(self, state):
+        """Guarda los parámetros de zoom y encuadre para restaurarlos en cuanto el widget sea visible."""
         try:
             zoom = float(state["zoom"])
             center = QPointF(float(state["center_x"]), float(state["center_y"]))
@@ -1358,6 +1459,7 @@ class TimelineCanvas(QWidget):
             QTimer.singleShot(0, self._apply_saved_view)
 
     def _apply_saved_view(self):
+        """Restaura el zoom y centro previamente guardados en la vista."""
         if self._saved_view_state is None:
             return
         zoom, center = self._saved_view_state
@@ -1366,18 +1468,22 @@ class TimelineCanvas(QWidget):
         self.view.centerOn(center)
 
     def _apply_initial_view(self):
+        """Aplica el encuadre inicial sobre el rectángulo de contenido."""
         if not self._initial_view_pending:
             return
         self._initial_view_pending = False
         self.view.show_start(self._content_rect.adjusted(-40, -40, 40, 40))
 
     def fit_view(self):
+        """Ajusta el zoom y centra la vista para mostrar todo el contenido disponible."""
         self.view.fit_rect(self._content_rect.adjusted(-40, -40, 40, 40))
 
     def _on_zoom_changed(self, value: float):
+        """Actualiza el porcentaje mostrado en el botón indicador de zoom."""
         self.zoom_label.setText(f"{round(value * 100)}%")
 
     def export_png(self):
+        """Renderiza la línea temporal a un archivo de imagen PNG en alta resolución."""
         path, _ = QFileDialog.getSaveFileName(self, "Exportar línea temporal", "linea_temporal.png",
                                               "Imagen PNG (*.png)")
         if not path:
@@ -1403,16 +1509,19 @@ class TimelineCanvas(QWidget):
     # Selección e inspector
     # ------------------------------------------------------------------ #
     def selected_item(self):
+        """Devuelve el EventItem actualmente seleccionado, o None si no hay ninguno."""
         for it in self.scene.selectedItems():
             if isinstance(it, EventItem):
                 return it
         return None
 
     def selected_id(self):
+        """Devuelve el ID del bloque del evento seleccionado."""
         it = self.selected_item() if self._items else None
         return it.block["id"] if it is not None else None
 
     def _on_selection_changed(self):
+        """Muestra u oculta el inspector lateral al cambiar la selección en la escena."""
         if self._rebuilding:
             return
         it = self.selected_item()
@@ -1424,6 +1533,7 @@ class TimelineCanvas(QWidget):
         self.inspector.show()
 
     def select_block(self, block_id, center=True, focus_title=False):
+        """Selecciona programáticamente un bloque por su ID y desplaza la vista hacia él."""
         it = self._items.get(block_id)
         if it is None:
             return
@@ -1437,10 +1547,12 @@ class TimelineCanvas(QWidget):
             self.inspector.focus_title()
 
     def _on_item_activated(self, item):
+        """Selecciona el evento y enfoca el campo de título en el inspector."""
         item.setSelected(True)
         self.inspector.focus_title()
 
     def _on_live_changed(self, block_id, fields):
+        """Actualiza el aspecto del evento en el lienzo a medida que se edita en el inspector."""
         it = self._items.get(block_id)
         if it is None:
             return
@@ -1475,11 +1587,13 @@ class TimelineCanvas(QWidget):
     # Arrastre y reordenado
     # ------------------------------------------------------------------ #
     def _drop_index(self, item):
+        """Calcula el índice de inserción horizontal de un elemento arrastrado."""
         others = [it for it in self._ordered_items() if it is not item]
         cx = item.pos().x()
         return sum(1 for o in others if o.home.x() < cx), others
 
     def _on_item_dragging(self, item):
+        """Muestra una línea guía vertical en el hueco de destino durante el arrastre."""
         index, others = self._drop_index(item)
         if not others:
             self._hide_marker()
@@ -1502,11 +1616,13 @@ class TimelineCanvas(QWidget):
         self._marker.setLine(x, r.top(), x, r.bottom())
 
     def _hide_marker(self):
+        """Oculta la línea guía vertical de arrastre."""
         if self._marker is not None and self._marker.scene() is self.scene:
             self.scene.removeItem(self._marker)
         self._marker = None
 
     def _on_item_drag_finished(self, item):
+        """Procesa el destino final tras el arrastre, cambiando orden o carril/grupo."""
         self._hide_marker()
         index, others = self._drop_index(item)
         ids = [o.block["id"] for o in others]
@@ -1524,10 +1640,12 @@ class TimelineCanvas(QWidget):
         self._relayout(animate=True)
 
     def _apply_order(self, ids):
+        """Reordena la lista interna self._blocks según la secuencia de IDs indicada."""
         by_id = {b["id"]: b for b in self._blocks}
         self._blocks = [by_id[i] for i in ids]
 
     def _move_selected(self, delta: int):
+        """Desplaza el evento seleccionado una posición hacia adelante o atrás."""
         it = self.selected_item()
         if it is None:
             return
@@ -1546,15 +1664,18 @@ class TimelineCanvas(QWidget):
     # Alta de eventos
     # ------------------------------------------------------------------ #
     def _default_group(self) -> str:
+        """Determina el grupo por defecto para un nuevo evento según los filtros activos."""
         if len(self._filters) == 1:
             name = next(iter(self._filters))
             return "" if name == NO_GROUP_LABEL else name
         return ""
 
     def _request_add(self, index: int, group: str):
+        """Emite de forma asíncrona la solicitud de inserción de un nuevo evento."""
         QTimer.singleShot(0, lambda: self.addRequested.emit(index, group))
 
     def _on_add_button(self):
+        """Gestiona la pulsación del botón superior para añadir un evento tras el seleccionado."""
         it = self.selected_item()
         ordered = self._ordered_items()
         index = ordered.index(it) + 1 if it in ordered else len(ordered)
@@ -1562,6 +1683,7 @@ class TimelineCanvas(QWidget):
         self._request_add(index, group)
 
     def _insertion_for(self, pos: QPointF):
+        """Calcula el índice de posición y el grupo correspondiente a unas coordenadas de la escena."""
         index = sum(1 for it in self._ordered_items() if it.home.x() < pos.x())
         group = self._default_group()
         if self._mode == "lanes" and self._lane_names and self._lane_h:
@@ -1571,15 +1693,18 @@ class TimelineCanvas(QWidget):
         return index, group
 
     def _on_background_double_click(self, pos: QPointF):
+        """Inserta un nuevo evento en las coordenadas donde se hizo doble clic."""
         self._request_add(*self._insertion_for(pos))
 
     def _on_gap_clicked(self, index: int):
+        """Inserta un nuevo evento en el índice del botón '+' pulsado."""
         self._request_add(index, self._default_group())
 
     # ------------------------------------------------------------------ #
     # Menús contextuales
     # ------------------------------------------------------------------ #
     def _on_background_context(self, pos: QPointF, global_pos: QPoint):
+        """Muestra el menú contextual del fondo del lienzo."""
         menu = QMenu(self)
         a_add = menu.addAction("Añadir evento aquí")
         menu.addSeparator()
@@ -1594,6 +1719,7 @@ class TimelineCanvas(QWidget):
             QTimer.singleShot(0, self.export_png)
 
     def _on_item_context(self, item: EventItem, global_pos: QPoint):
+        """Muestra el menú contextual de un evento específico."""
         ordered = self._ordered_items()
         i = ordered.index(item)
         block_id = item.block["id"]
@@ -1634,6 +1760,7 @@ class TimelineCanvas(QWidget):
             QTimer.singleShot(0, lambda: self.blockDeleteRequested.emit(block_id))
 
     def _emit_duplicate(self, block_id):
+        """Vuelca guardados pendientes y emite la solicitud de duplicación."""
         self.inspector.flush_pending_save()
         self.blockDuplicateRequested.emit(block_id)
 
@@ -1641,6 +1768,7 @@ class TimelineCanvas(QWidget):
     # Teclado
     # ------------------------------------------------------------------ #
     def _on_key_action(self, action: str):
+        """Ejecuta las acciones disparadas por atajos de teclado."""
         if action == "deselect":
             self.scene.clearSelection()
             return
@@ -1677,6 +1805,7 @@ class TimelineCanvas(QWidget):
     # para que la posición en la línea se conserve.
     # ------------------------------------------------------------------ #
     def _current_groups(self):
+        """Extrae el conjunto de grupos definidos y comprueba si hay eventos sin grupo."""
         names, has_ungrouped = set(), False
         for b in self._blocks:
             g = (b["group_name"] or "").strip()
@@ -1687,6 +1816,7 @@ class TimelineCanvas(QWidget):
         return sorted(names), has_ungrouped
 
     def _refresh_chips(self):
+        """Regenera los chips de filtro por grupo según los bloques existentes."""
         while self.chips_layout.count():
             widget = self.chips_layout.takeAt(0).widget()
             if widget:
@@ -1708,6 +1838,7 @@ class TimelineCanvas(QWidget):
         self._apply_filters()
 
     def _on_chip_toggled(self, name, checked):
+        """Añade o retira un grupo del conjunto de filtros activos."""
         if checked:
             self._filters.add(name)
         else:
@@ -1715,10 +1846,12 @@ class TimelineCanvas(QWidget):
         self._apply_filters()
 
     def _on_query_changed(self, text):
+        """Actualiza el texto del filtro de búsqueda."""
         self._query = text.strip().lower()
         self._apply_filters()
 
     def _apply_filters(self):
+        """Atenúa los elementos del lienzo que no coincidan con la búsqueda o grupos activos."""
         visible = 0
         for it in self._ordered_items():
             b = it.block

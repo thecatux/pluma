@@ -57,6 +57,7 @@ def _to_utf16_units(text: str) -> str:
 
 
 def _accent_table(chars) -> dict:
+    """Construye una tabla de traducción Unicode para normalizar caracteres con tilde conservando la eñe."""
     table = {}
     for ch in chars:
         if ch < "\u0080" or ch in _KEEP_DISTINCT:
@@ -82,16 +83,19 @@ def _fold(text: str, match_case: bool, ignore_accents: bool) -> str:
 
 
 def _is_word_char(ch: str) -> bool:
+    """Comprueba si un carácter pertenece a una palabra (alfanumérico o guion bajo)."""
     return ch.isalnum() or ch == "_"
 
 
 class FindReplaceBar(QFrame):
+    """Barra flotante superpuesta para buscar y reemplazar texto en el editor."""
     WIDTH = 410
     MARGIN = 12
     MAX_VISIBLE_HIGHLIGHTS = 1500
     SMALL_DOC_CHARS = 200_000  # por debajo se busca en cada pulsación, sin espera
 
     def __init__(self, host: QWidget, text_edit: QTextEdit):
+        """Inicializa la barra flotante conectando temporizadores y eventos del editor anfitrión."""
         super().__init__(host)
         self.host = host
         self.text_edit = text_edit
@@ -151,6 +155,7 @@ class FindReplaceBar(QFrame):
     # Construcción de la interfaz
     # ------------------------------------------------------------------ #
     def _tool_button(self, icon_name: str, tooltip: str) -> QToolButton:
+        """Crea un botón de herramienta compacto con tooltip e icono temático registrado."""
         button = QToolButton(self)
         button.setToolTip(tooltip)
         button.setIconSize(QSize(16, 16))
@@ -159,6 +164,7 @@ class FindReplaceBar(QFrame):
         return button
 
     def _option_button(self, text: str, tooltip: str) -> QToolButton:
+        """Crea un botón conmutable de texto plano para opciones de búsqueda."""
         button = QToolButton(self)
         button.setText(text)
         button.setToolTip(tooltip)
@@ -168,6 +174,7 @@ class FindReplaceBar(QFrame):
         return button
 
     def _build_ui(self):
+        """Construye la distribución interna de las filas de búsqueda, opciones y reemplazo."""
         self.setObjectName("findBar")
         self.setFrameShape(QFrame.NoFrame)
 
@@ -234,6 +241,7 @@ class FindReplaceBar(QFrame):
     # Tema
     # ------------------------------------------------------------------ #
     def _apply_theme(self, *_args):
+        """Aplica la hoja de estilos y los formatos de selección acordes al tema activo."""
         c = theme.colors()
         self.setStyleSheet(f"""
             QFrame#findBar {{
@@ -272,6 +280,7 @@ class FindReplaceBar(QFrame):
         self._apply_highlights()
 
     def _make_icon(self, name: str) -> QIcon:
+        """Construye un icono temático con estados normal y deshabilitado."""
         c = theme.colors()
         result = QIcon()
         result.addPixmap(icons.pixmap(name, c["text"], size=16), QIcon.Normal, QIcon.Off)
@@ -279,6 +288,7 @@ class FindReplaceBar(QFrame):
         return result
 
     def _refresh_icons(self):
+        """Actualiza todos los iconos de la barra de búsqueda según el tema."""
         for button, name in self._icon_buttons:
             if button is self.toggle_button:
                 name = "chevron-right" if self.replace_row.isHidden() else "chevron-down"
@@ -288,12 +298,14 @@ class FindReplaceBar(QFrame):
     # Mostrar / ocultar / colocar
     # ------------------------------------------------------------------ #
     def set_replace_visible(self, visible: bool):
+        """Muestra u oculta la fila de controles de reemplazo."""
         self.replace_row.setVisible(visible)
         self.toggle_button.setToolTip("Ocultar reemplazo" if visible else "Mostrar reemplazo (Ctrl+H)")
         self._refresh_icons()
         self.reposition()
 
     def open_bar(self, replace: bool = False):
+        """Abre la barra de búsqueda, opcionalmente con el modo reemplazo desplegado."""
         if replace:
             self.set_replace_visible(True)
         read_only = self.text_edit.isReadOnly()
@@ -321,6 +333,7 @@ class FindReplaceBar(QFrame):
         self._run_search()
 
     def close_bar(self):
+        """Cierra la barra de búsqueda y limpia los resaltados del editor."""
         cursor = self.text_edit.textCursor()
         if (self._current >= 0 and self._current < len(self._starts)
                 and cursor.position() == self._starts[self._current]):
@@ -334,6 +347,7 @@ class FindReplaceBar(QFrame):
         self.text_edit.setFocus()
 
     def reposition(self):
+        """Recalcula la posición flotante en la esquina superior derecha del editor."""
         width = max(260, min(self.WIDTH, self.host.width() - 2 * self.MARGIN))
         self.setFixedWidth(width)
         self.layout().activate()
@@ -343,6 +357,7 @@ class FindReplaceBar(QFrame):
         self.move(max(self.MARGIN, self.host.width() - self.width() - inset), self.MARGIN)
 
     def eventFilter(self, obj, event):
+        """Filtra eventos de teclado (Escape, F3, Enter) y redimensionamiento del anfitrión."""
         kind = event.type()
         if obj is self.host:
             if kind == QEvent.Resize and self.isVisible():
@@ -370,6 +385,7 @@ class FindReplaceBar(QFrame):
     # Búsqueda
     # ------------------------------------------------------------------ #
     def _on_document_changed(self):
+        """Marca las coincidencias como obsoletas cuando cambia el contenido del documento."""
         self._dirty = True
         if self._busy or not self.isVisible():
             return
@@ -377,6 +393,7 @@ class FindReplaceBar(QFrame):
         self._edit_timer.start(0 if small else 150)
 
     def _on_query_changed(self, *_args):
+        """Reinicia la búsqueda cuando cambia el texto o una opción."""
         self._flash_timer.stop()
         if self.text_edit.document().characterCount() < self.SMALL_DOC_CHARS:
             self._search_timer.stop()
@@ -385,6 +402,7 @@ class FindReplaceBar(QFrame):
             self._search_timer.start()
 
     def _folded_text(self, match_case: bool, ignore_accents: bool) -> str:
+        """Devuelve el texto del documento normalizado utilizando caché."""
         if self._dirty:
             self._plain = _to_utf16_units(self.text_edit.document().toPlainText())
             self._folded_cache.clear()
@@ -432,6 +450,7 @@ class FindReplaceBar(QFrame):
         self._starts = starts
 
     def _cursor_for(self, start: int, length: int = 0) -> QTextCursor:
+        """Crea un QTextCursor posicionado en el rango de coincidencia especificado."""
         cursor = QTextCursor(self.text_edit.document())
         cursor.setPosition(start)
         if length:
@@ -466,6 +485,7 @@ class FindReplaceBar(QFrame):
         self._apply_highlights()
 
     def _select_match(self, index: int):
+        """Selecciona y desplaza la vista hacia la coincidencia en el índice dado."""
         self._flash_timer.stop()
         self._current = index
         cursor = self._cursor_for(self._starts[index])
@@ -487,12 +507,15 @@ class FindReplaceBar(QFrame):
             scrollbar.setValue(scrollbar.value() - (bar.bottom() + 16 - rect.top()))
 
     def go_next(self):
+        """Navega a la siguiente coincidencia."""
         self._go(True)
 
     def go_previous(self):
+        """Navega a la coincidencia anterior."""
         self._go(False)
 
     def _go(self, forward: bool):
+        """Avanza o retrocede cíclicamente entre las coincidencias encontradas."""
         if not self._starts:
             self._run_search()
             return
@@ -515,6 +538,7 @@ class FindReplaceBar(QFrame):
     # Resaltado y contador
     # ------------------------------------------------------------------ #
     def _apply_highlights(self, *_args):
+        """Aplica los resaltados de selección extra solo a la región visible del documento."""
         editor = self.text_edit
         if not self.isVisible() or not self._starts:
             editor.setExtraSelections([])
@@ -537,10 +561,12 @@ class FindReplaceBar(QFrame):
         editor.setExtraSelections(selections)
 
     def _flash(self, message: str):
+        """Muestra un mensaje temporal en la etiqueta de contador."""
         self.counter.setText(message)
         self._flash_timer.start()
 
     def _update_counter(self):
+        """Actualiza el contador textual de resultados y el estado de habilitación de botones."""
         if self._flash_timer.isActive():
             return
         count = len(self._starts)
@@ -577,10 +603,12 @@ class FindReplaceBar(QFrame):
         return _fold(_to_utf16_units(selected), match_case, ignore_accents) == self._needle_folded
 
     def _insert_keeping_format(self, cursor: QTextCursor, probe: QTextCursor, text: str):
+        """Inserta texto conservando el formato de carácter del fragmento reemplazado."""
         probe.setPosition(cursor.selectionStart() + 1)
         cursor.insertText(text, probe.charFormat())
 
     def replace_current(self):
+        """Reemplaza la coincidencia actual y avanza a la siguiente."""
         if self.text_edit.isReadOnly() or not self._starts:
             return
         if self._dirty:
@@ -619,6 +647,7 @@ class FindReplaceBar(QFrame):
             self._apply_highlights()
 
     def replace_all(self):
+        """Reemplaza todas las coincidencias en un único bloque de edición atómico."""
         if self.text_edit.isReadOnly():
             return
         if self._dirty:

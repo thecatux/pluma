@@ -2,10 +2,15 @@
 
 Ficha única (no hay lista de elementos, a diferencia del resto de
 paneles) con la información general del proyecto: título, autor/a,
-género, sinopsis y número de páginas. El título nace igual al nombre
-del proyecto (ver `Database.create_project`) pero es editable de forma
-independiente. Todo se autoguarda en SQLite igual que en el resto de
-Pluma, con un pequeño retardo tras dejar de escribir.
+género, sinopsis y extensión estimada en capítulos. El título nace
+igual al nombre del proyecto (ver `Database.create_project`) pero es
+editable de forma independiente. Todo se autoguarda en SQLite igual
+que en el resto de Pluma, con un pequeño retardo tras dejar de
+escribir.
+
+Nota: el campo de la base de datos se llama `page_count` por razones
+históricas, pero en la interfaz se muestra y edita como "Extensión
+estimada (capítulos)".
 """
 
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QFormLayout, QLabel,
@@ -18,7 +23,10 @@ from pluma.core.db import DEFAULT_GENRES
 
 
 class InfoPanel(QWidget):
+    """Panel lateral con la ficha general del proyecto activo."""
+
     def __init__(self, db, parent=None):
+        """Inicializa el panel y construye el formulario de datos del proyecto."""
         super().__init__(parent)
         self.db = db
         self.project_id = None
@@ -68,9 +76,11 @@ class InfoPanel(QWidget):
 
     # ------------------------------------------------------------------ #
     def _apply_settings(self):
+        """Actualiza el intervalo del temporizador de autoguardado cuando cambia la configuración."""
         self._save_timer.setInterval(settings.autosave_interval_ms)
 
     def _build_card(self) -> QFrame:
+        """Construye la tarjeta con el formulario de datos del proyecto."""
         card = QFrame()
         card.setProperty("role", "card")
         card_layout = QVBoxLayout(card)
@@ -131,11 +141,13 @@ class InfoPanel(QWidget):
     # Ciclo de vida / carga de proyecto
     # ------------------------------------------------------------------ #
     def load_project(self, project_id: int):
+        """Guarda el estado pendiente y carga los datos del proyecto indicado."""
         self._flush_pending_save()
         self.project_id = project_id
         self._load_info()
 
     def _load_info(self):
+        """Lee los datos del proyecto desde la base de datos y rellena el formulario."""
         if self.project_id is None:
             return
         row = self.db.get_project_info(self.project_id)
@@ -147,18 +159,20 @@ class InfoPanel(QWidget):
         genre_index = self.genre_combo.findData(row["genre"])
         self.genre_combo.setCurrentIndex(genre_index if genre_index >= 0 else 0)
         self.synopsis_edit.setPlainText(row["synopsis"])
-        self.chapter_count_spin.setValue(row["page_count"]) # page_count es un nombre desactualizado
+        self.chapter_count_spin.setValue(row["page_count"])  # page_count es un nombre desactualizado
         self._loading = False
 
     # ------------------------------------------------------------------ #
     # Autoguardado
     # ------------------------------------------------------------------ #
     def _schedule_save(self, *_args):
+        """Inicia (o reinicia) el temporizador de autoguardado si hay un proyecto cargado."""
         if self._loading or self.project_id is None:
             return
         self._save_timer.start()
 
     def _save_info(self):
+        """Persiste los datos del formulario en la base de datos."""
         if self.project_id is None:
             return
         self.db.update_project_info(
@@ -171,6 +185,7 @@ class InfoPanel(QWidget):
         )
 
     def _flush_pending_save(self):
+        """Cancela el temporizador y guarda inmediatamente si hay un guardado pendiente."""
         if self._save_timer.isActive():
             self._save_timer.stop()
             self._save_info()

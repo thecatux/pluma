@@ -44,6 +44,7 @@ LICENSE_FILE = "LICENSE.txt"  # texto completo, incluido en los assets
 
 
 def _build_rows():
+    """Genera las filas de metadatos de compilación para la tarjeta de versión."""
     return [
         ("Build", BUILD_NUMBER),
         ("Fecha de compilación", BUILD_DATE),
@@ -51,6 +52,7 @@ def _build_rows():
 
 
 def _runtime_rows():
+    """Genera las filas de información del entorno de ejecución (SO, Python, Qt)."""
     return [
         ("Sistema", QSysInfo.prettyProductName()),
         ("Python", python_version()),
@@ -59,6 +61,7 @@ def _runtime_rows():
 
 
 def _copyright_line():
+    """Construye la línea de copyright formateada con año y autor."""
     if not APP_AUTHOR:
         return ""
     return f"© {APP_COPYRIGHT_YEAR} {APP_AUTHOR}"
@@ -68,6 +71,7 @@ class LicenseTextDialog(QDialog):
     """Visor de solo lectura del texto completo de la licencia."""
 
     def __init__(self, text, parent=None):
+        """Inicializa el visor con el texto completo de la licencia proporcionado."""
         super().__init__(parent)
         self.setWindowTitle(APP_LICENSE_NAME)
         self.setModal(True)
@@ -96,7 +100,10 @@ class LicenseTextDialog(QDialog):
 
 
 class AboutDialog(QDialog):
+    """Diálogo modal con información institucional, versión y licencia de Pluma."""
+
     def __init__(self, parent=None):
+        """Construye e inicializa el diálogo modal Acerca de."""
         super().__init__(parent)
         self.setWindowTitle(f"Acerca de {APP_NAME}")
         self.setModal(True)
@@ -127,6 +134,7 @@ class AboutDialog(QDialog):
     # Construcción
     # ------------------------------------------------------------------ #
     def _build_header(self):
+        """Construye la cabecera con el logotipo, nombre de la aplicación, versión y lema."""
         row = QHBoxLayout()
         row.setSpacing(16)
 
@@ -153,6 +161,7 @@ class AboutDialog(QDialog):
 
     @staticmethod
     def _card(title):
+        """Crea un contenedor QFrame con estilo de tarjeta y título de sección."""
         card = QFrame()
         card.setProperty("role", "card")
         layout = QVBoxLayout(card)
@@ -165,6 +174,7 @@ class AboutDialog(QDialog):
 
     @staticmethod
     def _rows_grid(rows):
+        """Construye un QGridLayout de dos columnas (etiqueta y valor) para los pares de datos."""
         grid = QGridLayout()
         grid.setHorizontalSpacing(16)
         grid.setVerticalSpacing(7)
@@ -180,6 +190,7 @@ class AboutDialog(QDialog):
         return grid
 
     def _build_version_card(self):
+        """Crea la tarjeta que muestra la versión, número de build y datos del runtime."""
         card, layout = self._card("Versión")
         layout.addLayout(self._rows_grid(_build_rows()))
 
@@ -192,6 +203,7 @@ class AboutDialog(QDialog):
         return card
 
     def _build_license_card(self):
+        """Crea la tarjeta de licencia con el aviso GPLv3, copyright y botones de acción."""
         card, layout = self._card("Licencia")
 
         license_name = QLabel(APP_LICENSE_NAME)
@@ -230,6 +242,7 @@ class AboutDialog(QDialog):
         return card
 
     def _build_footer(self):
+        """Construye la fila inferior con el botón de copiar información y el botón de cerrar."""
         row = QHBoxLayout()
         self.copy_button = QPushButton("Copiar información")
         self.copy_button.setProperty("variant", "flat")
@@ -251,11 +264,13 @@ class AboutDialog(QDialog):
     # Acciones
     # ------------------------------------------------------------------ #
     def _info_text(self):
+        """Genera el texto plano con toda la información técnica para copiar al portapapeles."""
         lines = [f"{APP_NAME} {APP_VERSION}"]
         lines += [f"{label}: {value}" for label, value in _build_rows() + _runtime_rows()]
         return "\n".join(lines)
 
     def _copy_info(self):
+        """Copia la información del sistema al portapapeles y activa el estado de confirmación visual."""
         QGuiApplication.clipboard().setText(self._info_text())
         self._copied = True
         self.copy_button.setText("Copiado")
@@ -263,11 +278,13 @@ class AboutDialog(QDialog):
         self._copy_timer.start(1800)
 
     def _reset_copy_button(self):
+        """Restaura el texto e icono original del botón de copiar tras el temporizador."""
         self._copied = False
         self.copy_button.setText("Copiar información")
         self._refresh_icons()
 
     def _show_full_license(self):
+        """Abre el diálogo interno con el texto completo de la licencia o el navegador web si no se encuentra."""
         try:
             path = Path(asset_path(LICENSE_FILE))
         except FileNotFoundError:
@@ -290,6 +307,7 @@ class AboutDialog(QDialog):
     _copied = False
 
     def _refresh_icons(self):
+        """Actualiza el icono de marca y el icono del botón de copiar con los colores del tema actual."""
         self.app_icon.setPixmap(icons.brand_pixmap(56))
         colors = theme.colors()
         if self._copied:
@@ -298,10 +316,12 @@ class AboutDialog(QDialog):
             self.copy_button.setIcon(icons.icon("copy", colors["text_secondary"], 16))
 
     def _on_theme_changed(self, *_args):
+        """Responde a los cambios de tema recargando iconos y repintando el fondo."""
         self._refresh_icons()
         self.update()
 
     def paintEvent(self, event):
+        """Pinta el fondo temático de la ventana."""
         super().paintEvent(event)
         painter = QPainter(self)
         painter.setClipRect(event.rect())

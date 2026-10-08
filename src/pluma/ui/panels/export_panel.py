@@ -21,7 +21,10 @@ _INVALID_FILE_NAME_CHARS = re.compile(r'[\\/:*?"<>|]')
 
 
 class ExportPanel(QWidget):
+    """Panel para elegir capítulos, formato y destino de exportación."""
+
     def __init__(self, db, parent=None):
+        """Construye los controles para configurar y lanzar una exportación."""
         super().__init__(parent)
         self.db = db
         self.project_id = None
@@ -79,6 +82,7 @@ class ExportPanel(QWidget):
     # Construcción de la UI
     # ------------------------------------------------------------------ #
     def _card(self, heading: str) -> tuple[QFrame, QVBoxLayout]:
+        """Crea una tarjeta con título y layout vertical."""
         card = QFrame()
         card.setProperty("role", "card")
         card_layout = QVBoxLayout(card)
@@ -90,6 +94,7 @@ class ExportPanel(QWidget):
         return card, card_layout
 
     def _build_chapters_card(self) -> QFrame:
+        """Construye los controles de selección de capítulos."""
         card, layout = self._card("Capítulos")
 
         self.all_radio = QRadioButton("Todos los capítulos")
@@ -121,6 +126,7 @@ class ExportPanel(QWidget):
         return card
 
     def _build_options_card(self) -> QFrame:
+        """Construye las opciones de formato y portada."""
         card, layout = self._card("Opciones")
 
         form = QFormLayout()
@@ -149,6 +155,7 @@ class ExportPanel(QWidget):
     # Carga de proyecto / lista de capítulos
     # ------------------------------------------------------------------ #
     def load_project(self, project_id: int):
+        """Asocia el panel al proyecto y carga sus capítulos."""
         self.project_id = project_id
         self._reload_chapters()
 
@@ -158,6 +165,7 @@ class ExportPanel(QWidget):
         self._reload_chapters(checked=self._checked_ids())
 
     def _reload_chapters(self, checked: set[int] | frozenset[int] = frozenset()):
+        """Recarga la lista y restaura las marcas de los identificadores dados."""
         chapters = self.db.list_chapters(self.project_id) if self.project_id else []
         self.chapters_list.blockSignals(True)
         self.chapters_list.clear()
@@ -171,21 +179,26 @@ class ExportPanel(QWidget):
         self._update_state()
 
     def _ids_with_state(self, state) -> set[int]:
+        """Devuelve los identificadores de capítulos con el estado indicado."""
         items = (self.chapters_list.item(i) for i in range(self.chapters_list.count()))
         return {item.data(Qt.UserRole) for item in items if item.checkState() == state}
 
     def _checked_ids(self) -> set[int]:
+        """Devuelve los identificadores de capítulos marcados."""
         return self._ids_with_state(Qt.Checked)
 
     def _set_all_checked(self, checked: bool):
+        """Marca o desmarca todos los capítulos de la lista."""
         state = Qt.Checked if checked else Qt.Unchecked
         for i in range(self.chapters_list.count()):
             self.chapters_list.item(i).setCheckState(state)
 
     def _on_scope_changed(self, *_args):
+        """Actualiza los controles al cambiar el alcance de exportación."""
         self._update_state()
 
     def _update_state(self, *_args):
+        """Refresca el resumen y habilita la exportación si hay capítulos."""
         total = self.chapters_list.count()
         only_selected = self.selected_radio.isChecked()
         self.chapters_list.setEnabled(only_selected)
@@ -202,6 +215,7 @@ class ExportPanel(QWidget):
     # Exportación
     # ------------------------------------------------------------------ #
     def export(self):
+        """Solicita el destino y exporta los capítulos seleccionados."""
         extension = self.format_combo.currentData()
         path = self._ask_destination(extension)
         if not path:
@@ -215,6 +229,7 @@ class ExportPanel(QWidget):
         QMessageBox.information(self, "Exportación completada", f"Se ha guardado:\n{path}")
 
     def _chapters_to_export(self):
+        """Devuelve todos los capítulos o solo los que están marcados."""
         chapters = self.db.list_chapters(self.project_id)
         if self.all_radio.isChecked():
             return chapters
@@ -222,6 +237,7 @@ class ExportPanel(QWidget):
         return [row for row in chapters if row["id"] in checked]
 
     def _ask_destination(self, extension: str) -> str:
+        """Solicita una ruta de destino y añade la extensión si falta."""
         label = FORMATS[extension][0]
         path, _filter = QFileDialog.getSaveFileName(
             self, "Exportar novela", f"{self._default_file_name()}.{extension}",
@@ -231,5 +247,6 @@ class ExportPanel(QWidget):
         return path
 
     def _default_file_name(self) -> str:
+        """Genera un nombre de archivo a partir del título del proyecto."""
         info = self.db.get_project_info(self.project_id)
         return _INVALID_FILE_NAME_CHARS.sub("", info["title"] or info["name"]).strip() or "novela"

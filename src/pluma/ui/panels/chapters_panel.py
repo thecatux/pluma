@@ -39,7 +39,10 @@ _FOCUS_MIN_SIDE_MARGIN = 24
 
 
 class ChaptersPanel(QWidget):
+    """Panel lateral con la lista de capítulos y el editor de texto enriquecido."""
+
     def __init__(self, db, parent=None):
+        """Inicializa el panel, construye el splitter y conecta señales."""
         super().__init__(parent)
         self.db = db
         self.project_id = None
@@ -87,6 +90,7 @@ class ChaptersPanel(QWidget):
         self._update_word_count()
 
     def _apply_theme(self, *_args):
+        """Aplica los colores del tema activo a los controles del panel."""
         c = theme.colors()
         self.synopsis_toggle.setStyleSheet(
             f"QToolButton {{ border: none; color: {c['text_secondary']}; font-weight: 600; padding: 2px 0; }}"
@@ -101,6 +105,7 @@ class ChaptersPanel(QWidget):
     # Construcción de la UI
     # ------------------------------------------------------------------ #
     def _build_list_column(self) -> QWidget:
+        """Construye la columna izquierda con la lista de capítulos y botones de acción."""
         left = QWidget()
         left_layout = QVBoxLayout(left)
         left_layout.setContentsMargins(14, 16, 10, 14)
@@ -142,12 +147,14 @@ class ChaptersPanel(QWidget):
         return left
 
     def _build_editor_column(self) -> QWidget:
+        """Construye la columna derecha con el estado vacío y el editor apilados."""
         self.right_stack = QStackedWidget()
         self.right_stack.addWidget(self._build_empty_state_widget())
         self.right_stack.addWidget(self._build_editor_widget())
         return self.right_stack
 
     def _build_empty_state_widget(self) -> QWidget:
+        """Construye la vista de estado vacío cuando no existen capítulos."""
         empty = QWidget()
         layout = QVBoxLayout(empty)
         layout.addStretch(1)
@@ -175,6 +182,7 @@ class ChaptersPanel(QWidget):
         return empty
 
     def _build_editor_widget(self) -> QWidget:
+        """Construye el área de edición del capítulo (cabecera, sinopsis, editor y estadísticas)."""
         right = QWidget()
         # `right_layout` (el layout raíz) mantiene SIEMPRE los márgenes
         # normales: aquí solo vive la cabecera (título + botón de modo
@@ -285,19 +293,23 @@ class ChaptersPanel(QWidget):
 
     @staticmethod
     def _dot_separator() -> QLabel:
+        """Crea un separador de punto tipográfico para la barra de estadísticas."""
         dot = QLabel("·")
         dot.setProperty("role", "muted")
         return dot
 
     def _on_synopsis_toggled(self, checked: bool):
+        """Muestra u oculta el campo de sinopsis según el estado del botón."""
         self._refresh_synopsis_icon()
         self.synopsis_edit.setVisible(checked)
 
     def _refresh_synopsis_icon(self):
+        """Actualiza el icono del botón de sinopsis según su estado desplegado/colapsado."""
         name = "chevron-down" if self.synopsis_toggle.isChecked() else "chevron-right"
         self.synopsis_toggle.setIcon(icons.icon(name, self._icon_color, size=14))
 
     def _refresh_focus_icon(self):
+        """Actualiza el icono del botón de modo enfoque según su estado activo/inactivo."""
         name = "x" if self.focus_button.isChecked() else "expand"
         self.focus_button.setIcon(icons.icon(name, self._icon_color, size=14))
 
@@ -305,6 +317,7 @@ class ChaptersPanel(QWidget):
     # Modo enfoque
     # ------------------------------------------------------------------ #
     def _toggle_focus_mode(self, checked: bool):
+        """Activa o desactiva el modo enfoque, ocultando o mostrando la lista y la barra de formato."""
         self._focus_mode = checked
         self.list_column.setVisible(not checked)
         self.toolbar_frame.setVisible(not checked)
@@ -328,11 +341,13 @@ class ChaptersPanel(QWidget):
         self._content_layout.setContentsMargins(side, top, side, bottom)
 
     def eventFilter(self, obj, event):
+        """Recalcula los márgenes del modo enfoque cuando el contenedor cambia de tamaño."""
         if obj is self.editor_container and event.type() == QEvent.Resize and self._focus_mode:
             self._update_focus_margins()
         return super().eventFilter(obj, event)
 
     def keyPressEvent(self, event):
+        """Saluda Escape como atajo para salir del modo enfoque."""
         if self._focus_mode and event.key() == Qt.Key_Escape:
             self.focus_button.setChecked(False)
             return
@@ -342,12 +357,14 @@ class ChaptersPanel(QWidget):
     # Ciclo de vida / carga de proyecto
     # ------------------------------------------------------------------ #
     def load_project(self, project_id: int):
+        """Guarda el estado pendiente y recarga la lista de capítulos del proyecto indicado."""
         self._flush_pending_save()
         self.project_id = project_id
         self._current_chapter_id = None
         self._reload_list(select_id=None)
 
     def _reload_list(self, select_id=None):
+        """Recarga la lista de capítulos desde la base de datos y selecciona uno opcionalmente."""
         self._loading = True
         self.list_widget.clear()
         # `word_count` viene cacheado desde SQLite: no hace falta volver
@@ -375,6 +392,7 @@ class ChaptersPanel(QWidget):
     # Selección y edición
     # ------------------------------------------------------------------ #
     def _on_selection_changed(self, current: QListWidgetItem, previous: QListWidgetItem):
+        """Carga el capítulo seleccionado en el editor o muestra el estado vacío."""
         if self._loading:
             return
         self._flush_pending_save()
@@ -386,6 +404,7 @@ class ChaptersPanel(QWidget):
         self._load_chapter(chapter_id)
 
     def _load_chapter(self, chapter_id: int):
+        """Lee el capítulo de la base de datos y lo muestra en el editor."""
         row = self.db.get_chapter(chapter_id)
         if row is None:
             return
@@ -409,10 +428,12 @@ class ChaptersPanel(QWidget):
             self._refresh_total_words()
 
     def _show_empty_state(self):
+        """Muestra la pantalla vacía y desactiva el botón de eliminar."""
         self.right_stack.setCurrentIndex(0)
         self.remove_button.setEnabled(False)
 
     def _update_word_count(self):
+        """Actualiza las estadísticas de palabras, caracteres y tiempo de lectura."""
         words = self.editor.word_count()
         chars = len(self.editor.text_edit.toPlainText())
         minutes = max(1, round(words / settings.reading_speed_wpm)) if words else 0
@@ -426,6 +447,7 @@ class ChaptersPanel(QWidget):
             current_item.setText(f"{row}.  {title}\n     {words} palabras")
 
     def _refresh_total_words(self):
+        """Actualiza la etiqueta de total de palabras del proyecto en la cabecera de la lista."""
         if self.project_id is None:
             self.total_words_label.setText("")
             return
@@ -436,10 +458,12 @@ class ChaptersPanel(QWidget):
     # Autoguardado
     # ------------------------------------------------------------------ #
     def _clear_save_status(self):
+        """Oculta el indicador de estado de guardado."""
         self.save_status_icon.setVisible(False)
         self.save_status_label.setText("")
 
     def _schedule_save(self):
+        """Inicia (o reinicia) el temporizador de autoguardado si el editor está activo."""
         if self._loading or self._current_chapter_id is None:
             return
         self.save_status_icon.setVisible(False)
@@ -447,12 +471,14 @@ class ChaptersPanel(QWidget):
         self._save_timer.start()
 
     def _on_title_edited(self, _text):
+        """Actualiza el recuento de palabras en la lista y programa el autoguardado."""
         if self._current_chapter_id is None:
             return
         self._update_word_count()
         self._schedule_save()
 
     def _save_current_content(self):
+        """Persiste el capítulo actual en la base de datos y actualiza el indicador de estado."""
         if self._current_chapter_id is None:
             return
         self.db.update_chapter(
@@ -471,6 +497,7 @@ class ChaptersPanel(QWidget):
         self._status_timer.start()
 
     def _flush_pending_save(self):
+        """Cancela el temporizador y guarda inmediatamente si hay un guardado pendiente."""
         if self._save_timer.isActive():
             self._save_timer.stop()
             self._save_current_content()
@@ -479,6 +506,7 @@ class ChaptersPanel(QWidget):
     # Acciones de lista
     # ------------------------------------------------------------------ #
     def add_chapter(self):
+        """Crea un nuevo capítulo al final de la lista y lo selecciona para edición."""
         if self.project_id is None:
             return
         self._flush_pending_save()
@@ -490,6 +518,7 @@ class ChaptersPanel(QWidget):
         self.title_edit.selectAll()
 
     def remove_current_chapter(self):
+        """Elimina el capítulo seleccionado (con confirmación opcional) y recarga la lista."""
         if self._current_chapter_id is None:
             return
         if settings.confirm_before_delete:
@@ -504,6 +533,7 @@ class ChaptersPanel(QWidget):
         self._reload_list()
 
     def _on_rows_moved(self, *_args):
+        """Persiste el nuevo orden de capítulos en la base de datos y refresca la lista."""
         if self._loading or self.project_id is None:
             return
         ordered_ids = [

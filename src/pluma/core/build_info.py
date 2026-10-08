@@ -1,4 +1,4 @@
-"""Version and build metadata shown by the About dialog."""
+"""Metadatos de versión y compilación mostrados en el diálogo «Acerca de»."""
 
 import os
 import subprocess
@@ -27,6 +27,7 @@ APP_SOURCE_URL = ""
 
 
 def _git_value(*arguments):
+    """Ejecuta un comando git y devuelve la salida limpia."""
     return subprocess.run(
         ["git", *arguments],
         cwd=Path(__file__).resolve().parent,
@@ -38,6 +39,7 @@ def _git_value(*arguments):
 
 
 def _build_number():
+    """Obtiene el identificador de compilación desde el entorno, el sello o git."""
     supplied_number = os.environ.get("PLUMA_BUILD_NUMBER")
     if supplied_number:
         return supplied_number
@@ -55,6 +57,7 @@ def _build_number():
 
 
 def _build_date():
+    """Obtiene la fecha de compilación desde el entorno, el sello o el epoch fuente."""
     supplied_date = os.environ.get("PLUMA_BUILD_DATE")
     if supplied_date:
         return supplied_date

@@ -14,6 +14,7 @@ class _DragHandle(QLabel):
     """Tirador desde el que se arrastra una tarjeta para reordenarla."""
 
     def __init__(self, row):
+        """Inicializa el tirador y lo asocia a la tarjeta padre."""
         super().__init__(row)
         self.row = row
         self._press_pos = None
@@ -21,9 +22,11 @@ class _DragHandle(QLabel):
         self.setToolTip("Arrastra para reordenar")
 
     def mousePressEvent(self, event):
+        """Registra la posición inicial del puntero al pulsar."""
         self._press_pos = event.position().toPoint()
 
     def mouseMoveEvent(self, event):
+        """Inicia el arrastre si el puntero se mueve más allá del umbral de QApplication."""
         if self._press_pos is None or not event.buttons() & Qt.LeftButton:
             return
         distance = (event.position().toPoint() - self._press_pos).manhattanLength()
@@ -31,6 +34,7 @@ class _DragHandle(QLabel):
             self._start_drag()
 
     def _start_drag(self):
+        """Lanza un QDrag con la captura de la tarjeta como pixmap."""
         drag = QDrag(self)
         drag.setMimeData(QMimeData())
         drag.setPixmap(self.row.grab())
@@ -53,6 +57,7 @@ class FieldRow(QFrame):
     MAX_VALUE_LINES = 100
 
     def __init__(self, field_id, field_name, field_value, on_change, on_delete, parent=None):
+        """Construye la tarjeta con un tirador, un campo de nombre, un campo de valor y un botón de borrado."""
         super().__init__(parent)
         self.field_id = field_id
         self._on_change = on_change
@@ -100,6 +105,7 @@ class FieldRow(QFrame):
         theme.signals.changed.connect(self._apply_theme)
 
     def _apply_theme(self, *_args):
+        """Aplica los colores del tema activo a los controles de la tarjeta."""
         c = theme.colors()
         self.name_edit.setStyleSheet(
             "border: none; background: transparent; padding: 2px 0;"
@@ -110,6 +116,7 @@ class FieldRow(QFrame):
         self.drag_handle.setPixmap(icons.pixmap("grip", c["text_muted"], size=14))
 
     def _height_for_lines(self, lines: float) -> int:
+        """Calcula la altura en píxeles necesaria para mostrar el número de líneas dado."""
         document = self.value_edit.document()
         line_height = self.value_edit.fontMetrics().lineSpacing()
         margins = 2 * (document.documentMargin() + self.value_edit.frameWidth())
@@ -126,15 +133,19 @@ class FieldRow(QFrame):
         self.value_edit.setFixedHeight(max(self.MIN_VALUE_HEIGHT, height))
 
     def _changed(self, *_args):
+        """Notifica al propietario que el contenido de la tarjeta ha cambiado."""
         self._on_change(self)
 
     def _delete(self):
+        """Notifica al propietario que se ha solicitado eliminar esta tarjeta."""
         self._on_delete(self)
 
     def field_name(self) -> str:
+        """Devuelve el nombre del campo, o 'Campo' si está vacío."""
         return self.name_edit.text().strip() or "Campo"
 
     def field_value(self) -> str:
+        """Devuelve el valor actual del campo como texto plano."""
         return self.value_edit.toPlainText()
 
 
@@ -149,6 +160,7 @@ class FieldList(QScrollArea):
     AUTOSCROLL_STEP = 14
 
     def __init__(self, parent=None):
+        """Inicializa el área de scroll y el contenedor vertical de tarjetas."""
         super().__init__(parent)
         self._rows: list[FieldRow] = []
         self.setWidgetResizable(True)
@@ -166,18 +178,22 @@ class FieldList(QScrollArea):
         self._indicator.hide()
 
     def rows(self) -> list[FieldRow]:
+        """Devuelve una copia de la lista actual de tarjetas."""
         return list(self._rows)
 
     def add_row(self, row: FieldRow):
+        """Añade una tarjeta al final de la lista."""
         self._layout.insertWidget(len(self._rows), row)
         self._rows.append(row)
 
     def remove_row(self, row: FieldRow):
+        """Elimina una tarjeta de la lista y la desconecta del layout."""
         self._layout.removeWidget(row)
         row.setParent(None)
         self._rows.remove(row)
 
     def clear(self):
+        """Elimina todas las tarjetas de la lista."""
         for row in self.rows():
             self.remove_row(row)
 
@@ -185,12 +201,14 @@ class FieldList(QScrollArea):
     # Arrastrar y soltar
     # ------------------------------------------------------------------ #
     def _dragged_row(self, event):
+        """Retorna la tarjeta arrastrada si el origen es un _DragHandle de esta lista."""
         source = event.source()
         if isinstance(source, _DragHandle) and source.row in self._rows:
             return source.row
         return None
 
     def _drop_index(self, event) -> int:
+        """Calcula la posición de inserción en función de la coordenada vertical del cursor."""
         point = self.widget().mapFrom(self.viewport(), event.position().toPoint())
         for index, row in enumerate(self._rows):
             if point.y() < row.geometry().center().y():
@@ -198,10 +216,12 @@ class FieldList(QScrollArea):
         return len(self._rows)
 
     def dragEnterEvent(self, event):
+        """Acepta el evento de arrastre si proviene de una tarjeta de esta lista."""
         if self._dragged_row(event) is not None:
             event.acceptProposedAction()
 
     def dragMoveEvent(self, event):
+        """Actualiza el indicador de posición y el desplazamiento automático durante el arrastre."""
         if self._dragged_row(event) is None:
             return
         event.acceptProposedAction()
@@ -209,9 +229,11 @@ class FieldList(QScrollArea):
         self._show_indicator(self._drop_index(event))
 
     def dragLeaveEvent(self, event):
+        """Oculta el indicador al abandonar el área de la lista."""
         self._indicator.hide()
 
     def dropEvent(self, event):
+        """Mueve la tarjeta arrastrada a la posición de destino y emite `reordered`."""
         row = self._dragged_row(event)
         self._indicator.hide()
         if row is None:
@@ -220,6 +242,7 @@ class FieldList(QScrollArea):
         self._move_row(row, self._drop_index(event))
 
     def _move_row(self, row: FieldRow, index: int):
+        """Reposiciona una tarjeta en el layout y emite la señal de reordenación."""
         old = self._rows.index(row)
         new = index - 1 if index > old else index
         if new == old:
@@ -230,6 +253,7 @@ class FieldList(QScrollArea):
         self.reordered.emit([r.field_id for r in self._rows])
 
     def _show_indicator(self, index: int):
+        """Muestra la línea indicadora de inserción en la posición correspondiente."""
         spacing = self._layout.spacing()
         if index < len(self._rows):
             y = self._rows[index].geometry().top() - spacing // 2
@@ -242,6 +266,7 @@ class FieldList(QScrollArea):
         self._indicator.show()
 
     def _autoscroll(self, y: int):
+        """Desplaza la lista automáticamente cuando el cursor alcanza los bordes durante el arrastre."""
         bar = self.verticalScrollBar()
         if y < self.AUTOSCROLL_MARGIN:
             bar.setValue(bar.value() - self.AUTOSCROLL_STEP)

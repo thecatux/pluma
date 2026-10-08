@@ -1,11 +1,11 @@
-"""Locate application assets in source, installed, and frozen builds."""
+"""Localización de recursos/assets de la aplicación en desarrollo y compilación."""
 
 import sys
 from pathlib import Path
 
 
 def asset_path(name: str) -> Path:
-    """Return the path to a bundled asset or raise if it is unavailable."""
+    """Devuelve la ruta absoluta a un recurso empaquetado o lanza una excepción si no existe."""
     if Path(name).name != name:
         raise ValueError("Asset name must not contain a directory")
 

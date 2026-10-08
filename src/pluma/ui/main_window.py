@@ -1,10 +1,10 @@
 """Ventana principal de Pluma.
 
-Estructura: una barra lateral fija a la izquierda con las cinco
-secciones (Capítulos, Personajes, Escenas, Esquema, Notas) y, a la
-derecha, un QStackedWidget que muestra el panel correspondiente. Cada
-panel es responsable de su propia UI y de leer/escribir en SQLite; esta
-clase solo hace de anfitrión y gestiona el cambio de proyecto.
+Estructura: una barra lateral fija a la izquierda con las secciones
+(Datos de la novela, Capítulos, Personajes, Escenas, Línea temporal, Notas,
+Exportar, Ajustes) y, a la derecha, un QStackedWidget que muestra el panel
+correspondiente. Cada panel es responsable de su propia UI y de leer/escribir
+en SQLite; esta clase hace de anfitrión y gestiona el ciclo de vida del proyecto.
 """
 
 from PySide6.QtWidgets import (QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
@@ -53,7 +53,10 @@ SIDEBAR_TOGGLE_TIPS = {
 
 
 class MainWindow(QMainWindow):
+    """Ventana principal de la aplicación que orquesta paneles y persistencia de interfaz."""
+
     def __init__(self, db: Database, theme_controller=None):
+        """Inicializa la ventana principal, carga configuraciones y construye la interfaz."""
         super().__init__()
         self.db = db
         self.theme_controller = theme_controller
@@ -102,6 +105,7 @@ class MainWindow(QMainWindow):
 
     # ------------------------------------------------------------------ #
     def _build_sidebar_and_stack(self):
+        """Construye la barra lateral de navegación y la pila de paneles de contenido."""
         central = QWidget()
         layout = QHBoxLayout(central)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -207,6 +211,7 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(central)
 
     def _refresh_sidebar_icons(self, *_args):
+        """Actualiza los iconos vectoriales de la barra lateral con los colores del tema actual."""
         c = theme.colors()
         self.app_icon_label.setPixmap(icons.brand_pixmap(20))
         self.switch_project_button.setIcon(icons.icon("library", c["on_primary"], size=16))
@@ -218,6 +223,7 @@ class MainWindow(QMainWindow):
             ))
 
     def _build_sidebar_toggle(self, toolbar):
+        """Crea el botón de alternancia del modo de la barra lateral en la barra de herramientas."""
         self.sidebar_toggle_button = QPushButton()
         self.sidebar_toggle_button.setProperty("variant", "flat")
         self.sidebar_toggle_button.setIconSize(QSize(16, 16))
@@ -229,11 +235,13 @@ class MainWindow(QMainWindow):
         theme.signals.changed.connect(self._refresh_sidebar_toggle_icon)
 
     def _refresh_sidebar_toggle_icon(self, *_args):
+        """Actualiza el icono del botón de alternancia de la barra lateral."""
         self.sidebar_toggle_button.setIcon(
             icons.icon("sidebar", theme.colors()["text_secondary"], size=16)
         )
 
     def _build_about_button(self, toolbar):
+        """Crea el botón que abre el diálogo 'Acerca de Pluma' en la barra de herramientas."""
         self.about_button = QPushButton()
         self.about_button.setProperty("variant", "flat")
         self.about_button.setIconSize(QSize(16, 16))
@@ -246,18 +254,22 @@ class MainWindow(QMainWindow):
         theme.signals.changed.connect(self._refresh_about_icon)
 
     def _refresh_about_icon(self, *_args):
+        """Actualiza el icono del botón 'Acerca de'."""
         self.about_button.setIcon(
             icons.icon("info", theme.colors()["text_secondary"], size=16)
         )
 
     def _show_about_dialog(self):
+        """Abre el diálogo modal con los detalles de versión y licencia."""
         AboutDialog(self).exec()
 
     def _cycle_sidebar_mode(self):
+        """Rota cíclicamente entre los modos de visualización de la barra lateral (completo, iconos, oculto)."""
         next_index = (SIDEBAR_MODES.index(self._sidebar_mode) + 1) % len(SIDEBAR_MODES)
         self._set_sidebar_mode(SIDEBAR_MODES[next_index])
 
     def _set_sidebar_mode(self, mode: str):
+        """Aplica el modo especificado a la barra lateral ajustando márgenes, anchos y visibilidad."""
         self._sidebar_mode = mode
         self._schedule_ui_state_save()
         self.sidebar_toggle_button.setToolTip(SIDEBAR_TOGGLE_TIPS[mode])
@@ -283,6 +295,7 @@ class MainWindow(QMainWindow):
             item.setToolTip(label if compact else "")
 
     def _build_global_controls(self):
+        """Crea la barra de herramientas superior y registra los atajos de teclado globales."""
         toolbar = QToolBar("Controles de ventana", self)
         toolbar.setObjectName("GlobalControls")
         toolbar.setMovable(False)
@@ -310,11 +323,13 @@ class MainWindow(QMainWindow):
         self.addAction(toggle_action)
 
     def _build_status_bar(self):
+        """Inicializa la barra de estado inferior."""
         status = QStatusBar()
         self.setStatusBar(status)
 
     # ------------------------------------------------------------------ #
     def paintEvent(self, event):
+        """Pinta el fondo decorativo translúcido según el tema activo."""
         # Primero el degradado del QSS y encima el fondo del tema activo.
         super().paintEvent(event)
         painter = QPainter(self)
@@ -323,6 +338,7 @@ class MainWindow(QMainWindow):
         painter.end()
 
     def _on_section_changed(self, row: int):
+        """Gestiona el cambio de pestaña activa volcando guardados pendientes del panel anterior."""
         previous_row = self.stack.currentIndex()
         if previous_row != row and 0 <= previous_row < len(SECTIONS):
             previous_key = SECTIONS[previous_row][0]
@@ -338,6 +354,7 @@ class MainWindow(QMainWindow):
         self._schedule_ui_state_save()
 
     def load_project(self, project_id: int, project_name: str):
+        """Carga un proyecto en todos los paneles y restaura el estado previo de la interfaz."""
         if self.project_id is not None:
             self._ui_state_timer.stop()
             for panel in self.panels.values():
@@ -396,10 +413,12 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(f"Proyecto abierto: {project_name}", 3000)
 
     def _schedule_ui_state_save(self, *_args):
+        """Programa el guardado retrasado del estado de la interfaz en segundo plano."""
         if self.project_id is not None and not self._restoring_ui_state:
             self._ui_state_timer.start()
 
     def _capture_editor_state(self, panel, item_id):
+        """Captura la posición del cursor, selección y desplazamiento de un editor."""
         if item_id is None:
             return None
         text_edit = panel.editor.text_edit
@@ -413,6 +432,7 @@ class MainWindow(QMainWindow):
         }
 
     def _capture_ui_state(self):
+        """Empaqueta el estado de navegación, vistas y selecciones del proyecto activo."""
         selected = {
             "chapters": self.panels["chapters"]._current_chapter_id,
             "characters": self.panels["characters"]._current_character_id,
@@ -450,10 +470,12 @@ class MainWindow(QMainWindow):
         }
 
     def _save_ui_state(self):
+        """Persiste el estado de la interfaz del proyecto en la base de datos."""
         if self.project_id is not None and not self._restoring_ui_state:
             self.db.save_project_ui_state(self.project_id, self._capture_ui_state())
 
     def _restore_editor_state(self, panel, state, restore_focus):
+        """Restaura la posición del cursor, selección y scroll en un editor de texto."""
         text_edit = panel.editor.text_edit
         maximum = max(0, text_edit.document().characterCount() - 1)
         position = max(0, min(int(state.get("position", 0)), maximum))
@@ -471,12 +493,14 @@ class MainWindow(QMainWindow):
         QTimer.singleShot(0, restore_scroll)
 
     def prompt_switch_project(self):
+        """Muestra el diálogo de selección de proyecto y carga el proyecto escogido."""
         dialog = ProjectDialog(self.db, self)
         if dialog.exec() and dialog.selected_project_id is not None:
             row = next(p for p in self.db.list_projects() if p["id"] == dialog.selected_project_id)
             self.load_project(row["id"], row["name"])
 
     def _on_database_restored(self):
+        """Gestiona la restauración de una copia de seguridad cerrando la aplicación de forma limpia."""
         # Los paneles muestran datos de la base de datos anterior, así que
         # Pluma se cierra. Con project_id a None, el cierre no vuelca esos
         # datos (ni el estado de la interfaz) sobre la base restaurada.
@@ -485,6 +509,7 @@ class MainWindow(QMainWindow):
         self.close()
 
     def closeEvent(self, event):
+        """Garantiza el guardado de cambios pendientes y guarda la geometría de ventana antes de salir."""
         # Cada panel gestiona su propio autoguardado con un pequeño
         # retardo; al cerrar la aplicación forzamos que se vuelque
         # cualquier cambio pendiente para no perder la última edición.

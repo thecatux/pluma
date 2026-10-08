@@ -34,6 +34,7 @@ _SVG_WRAPPER = (
 
 
 def _gear_teeth() -> str:
+    """Genera el SVG de los ocho dientes simétricos del icono de ajustes."""
     # Ocho dientes iguales, cada uno un rectángulo pequeño rotado
     # alrededor del centro (12,12): más fácil de mantener correcto a
     # mano que una silueta de engranaje dibujada como un único path.
@@ -212,7 +213,7 @@ def dual_icon(name: str, normal_color: str, selected_color: str, size: int = 20,
 
 
 def application_icon() -> QIcon:
-    """Build the app icon from all supplied Windows icon sizes."""
+    """Construye el icono de la aplicación a partir de todos los tamaños .ico disponibles."""
     result = QIcon()
     for size in (16, 24, 32, 48, 64, 128, 256):
         result.addFile(str(asset_path(f"icon_{size}.ico")))
@@ -220,7 +221,7 @@ def application_icon() -> QIcon:
 
 
 def brand_pixmap(size: int) -> QPixmap:
-    """Render the Pluma brand SVG at high density for in-app use."""
+    """Renderiza el logotipo vectorial SVG de Pluma a alta densidad para su uso en la interfaz."""
     renderer = QSvgRenderer(str(asset_path("pluma.svg")))
     if not renderer.isValid():
         raise ValueError("Invalid Pluma brand SVG")

@@ -28,6 +28,7 @@ DEFAULT_EDITOR_FONT_SIZE = 12
 
 
 class _SettingsSignals(QObject):
+    """Señales globales para notificar cambios en la configuración de la aplicación."""
     changed = Signal()
 
 
@@ -109,6 +110,7 @@ class AppSettings:
         signals.changed.emit()
 
     def reset_to_defaults(self):
+        """Restaura todos los valores de configuración a sus valores iniciales por defecto."""
         self.autosave_interval_ms = DEFAULT_AUTOSAVE_MS
         self.reading_speed_wpm = DEFAULT_READING_SPEED
         self.confirm_before_delete = True

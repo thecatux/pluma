@@ -70,6 +70,7 @@ class Theme:
 
 
 def _load_theme(module) -> Theme:
+    """Instancia y valida un objeto Theme a partir de un módulo de tema."""
     palettes = {scheme: palette
                 for scheme, palette in (("light", getattr(module, "LIGHT", None)),
                                         ("dark", getattr(module, "DARK", None)))
@@ -156,14 +157,17 @@ def current_theme() -> Theme:
 # El código de pintura de un tema solo se ejecuta mientras ese tema está
 # activo.
 def _hook(name: str, default=None):
+    """Obtiene un gancho de renderizado del módulo del tema activo si existe."""
     return getattr(_current_theme.module, name, default)
 
 
 def _is_dark() -> bool:
+    """Indica si el esquema de color activo es oscuro."""
     return _current_scheme == "dark"
 
 
 def _flat_panel(p, bounds, body, radius, c, dark):
+    """Función de renderizado por defecto para paneles con diseño plano."""
     p.setBrush(QColor(c["surface"]))
     p.setPen(QPen(QColor(c["border"]), 1.0))
     p.drawRoundedRect(body.adjusted(0.5, 0.5, -0.5, -0.5), radius, radius)
@@ -186,6 +190,7 @@ class Panel(QWidget):
     """
 
     def __init__(self, parent=None, radius: float = 22.0, inset: int = 12):
+        """Inicializa el panel flotante con un radio de esquinas y margen de sombra dados."""
         super().__init__(parent)
         self.radius = radius
         self.inset = inset
@@ -194,14 +199,17 @@ class Panel(QWidget):
         signals.changed.connect(self._invalidate)
 
     def _invalidate(self, *_args):
+        """Invalida la caché del panel forzando su repintado."""
         self._cache_key = None
         self.update()
 
     def body_rect(self) -> QRectF:
+        """Calcula el área interna del cuerpo del panel descontando los márgenes de inserción."""
         i = self.inset
         return QRectF(self.rect()).adjusted(i, i, -i, -i)
 
     def _render(self, dpr: float) -> QPixmap:
+        """Renderiza el panel en un mapa de bits considerando la densidad de píxeles."""
         size = self.size()
         pm = QPixmap(round(size.width() * dpr), round(size.height() * dpr))
         pm.setDevicePixelRatio(dpr)
@@ -214,6 +222,7 @@ class Panel(QWidget):
         return pm
 
     def paintEvent(self, _event):
+        """Dibuja el panel utilizando la caché renderizada o regenerándola si expiró."""
         dpr = self.devicePixelRatioF()
         key = (self.size(), dpr, _current_scheme, _current_colors["primary"])
         if key != self._cache_key or self._cache is None:
@@ -231,6 +240,7 @@ class SidebarItemDelegate(QStyledItemDelegate):
     MARGIN_Y = 2
 
     def paint(self, painter, option, index):
+        """Dibuja el elemento de la barra lateral con resaltado temático en hover o selección."""
         selected = bool(option.state & QStyle.StateFlag.State_Selected)
         hover = bool(option.state & QStyle.StateFlag.State_MouseOver)
         paint = _hook("paint_pill")
@@ -245,6 +255,7 @@ class _Sheen(QWidget):
     """Overlay transparente que pinta solo los reflejos sobre un widget."""
 
     def __init__(self, target: QWidget, radius: float, strength: float):
+        """Inicializa la capa de reflejo encima de un widget objetivo."""
         super().__init__(target)
         self.radius = radius
         self.strength = strength
@@ -254,6 +265,7 @@ class _Sheen(QWidget):
         self.setGeometry(target.rect())
 
     def paintEvent(self, _event):
+        """Dibuja el efecto de reflejo temático sobre el área del widget."""
         paint = _hook("paint_sheen")
         if paint is not None:
             # El filo de 1 px y el recorte quedan alineados con el borde QSS.
@@ -268,6 +280,7 @@ class _Sheens(QObject):
     filtro de eventos ni overlays."""
 
     def __init__(self):
+        """Inicializa el gestor de reflejos temáticos."""
         super().__init__()
         self._active = False
 
@@ -286,6 +299,7 @@ class _Sheens(QObject):
                 self._attach(widget)
 
     def eventFilter(self, obj, event):
+        """Intercepta eventos de muestra y cambio de tamaño para reposicionar o acoplar reflejos."""
         kind = event.type()
         if kind == QEvent.Show and getattr(obj, "_sheen", None) is None:
             self._attach(obj)
@@ -297,6 +311,7 @@ class _Sheens(QObject):
         return False
 
     def _attach(self, obj):
+        """Acopla una capa _Sheen a un widget si coincide con las reglas del tema activo."""
         roles = _hook("SHEEN", {})
         if isinstance(obj, QGroupBox):
             spec = roles.get("groupbox")
@@ -315,6 +330,7 @@ _sheens = _Sheens()
 
 
 def _blend_colors(foreground: QColor, background: QColor, ratio: float) -> QColor:
+    """Mezcla linealmente dos colores en base a una proporción dada."""
     return QColor(
         round(background.red() * (1 - ratio) + foreground.red() * ratio),
         round(background.green() * (1 - ratio) + foreground.green() * ratio),
@@ -323,6 +339,7 @@ def _blend_colors(foreground: QColor, background: QColor, ratio: float) -> QColo
 
 
 def _contrast_ratio(first: QColor, second: QColor) -> float:
+    """Calcula el ratio de contraste WCAG entre dos colores."""
     def luminance(color: QColor) -> float:
         channels = [color.redF(), color.greenF(), color.blueF()]
         linear = [value / 12.92 if value <= 0.04045 else ((value + 0.055) / 1.055) ** 2.4
@@ -334,6 +351,7 @@ def _contrast_ratio(first: QColor, second: QColor) -> float:
 
 
 def _palette_with_accent(palette: dict, accent_value: str, dark: bool) -> dict:
+    """Genera una copia de la paleta reemplazando y recalculando los colores derivados del acento."""
     accent = QColor(accent_value)
     result = dict(palette)
     surface = QColor(palette["surface"])
@@ -366,6 +384,7 @@ def _palette_with_accent(palette: dict, accent_value: str, dark: bool) -> dict:
 
 
 def build_stylesheet(palette: dict, font: str = FONT_FAMILY) -> str:
+    """Genera la hoja de estilos QSS completa para la aplicación según la paleta y tipografía."""
     c = palette
     r = RADIUS
     return f"""
@@ -851,6 +870,7 @@ class ThemeController(QObject):
     themeChanged = Signal(str)  # esquema resuelto: "light" | "dark"
 
     def __init__(self, app):
+        """Carga la configuración persistida y engancha el sistema de señales del SO."""
         super().__init__(app)
         self.app = app
         self._settings = QSettings()
@@ -865,22 +885,27 @@ class ThemeController(QObject):
 
     @property
     def theme_name(self) -> str:
+        """Nombre interno del tema activo (clave en `THEMES`)."""
         return self._theme_name
 
     @property
     def mode(self) -> str:
+        """Modo de color actual: 'auto', 'light' o 'dark'."""
         return self._mode
 
     @property
     def scheme(self) -> str:
+        """Esquema resuelto tras el último `apply()`: 'light' o 'dark'."""
         return self._scheme
 
     @property
     def accent_color(self) -> str:
+        """Color de acento activo (personalizado si existe, o primario del tema)."""
         return self._accent_color or THEMES[self._theme_name].resolve(self._scheme)[1]["primary"]
 
     @property
     def has_custom_accent(self) -> bool:
+        """Indica si el usuario ha definido un color de acento personalizado."""
         return bool(self._accent_color)
 
     def _set(self, attr: str, key: str, value):
@@ -892,14 +917,17 @@ class ThemeController(QObject):
         self.apply()
 
     def set_theme(self, name: str):
+        """Cambia el tema activo por nombre si existe en el registro."""
         if name in THEMES:
             self._set("_theme_name", "theme/name", name)
 
     def set_mode(self, mode: str):
+        """Cambia el modo de color ('auto', 'light' o 'dark')."""
         if mode in MODE_LABELS:
             self._set("_mode", "theme/mode", mode)
 
     def set_accent_color(self, color: str | None):
+        """Establece un acento personalizado o lo elimina (None) para volver al del tema."""
         if color is None:
             if self._accent_color:
                 self._accent_color = ""
@@ -919,10 +947,12 @@ class ThemeController(QObject):
             pass
 
     def _on_system_scheme_changed(self, *_args):
+        """Reaplica el tema cuando el SO cambia su esquema de color (solo en modo 'auto')."""
         if self._mode == "auto":
             self.apply()
 
     def _detect_system_scheme(self) -> str:
+        """Detecta si el SO usa esquema oscuro o claro en tiempo de ejecución."""
         try:
             from PySide6.QtCore import Qt as _Qt
             scheme = QGuiApplication.styleHints().colorScheme()
@@ -939,6 +969,7 @@ class ThemeController(QObject):
         return "dark" if luminance < 128 else "light"
 
     def apply(self):
+        """Resuelve el esquema activo y aplica la hoja de estilos y fuente a la aplicación."""
         global _current_theme, _current_colors, _current_scheme
         theme = THEMES[self._theme_name]
         wanted = self._mode if self._mode != "auto" else self._detect_system_scheme()
@@ -963,6 +994,7 @@ class ThemeController(QObject):
 
 
 def apply_theme(app) -> ThemeController:
+    """Crea un ThemeController, aplica el tema inicial y lo devuelve."""
     controller = ThemeController(app)
     controller.apply()
     return controller

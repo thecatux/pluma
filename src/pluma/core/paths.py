@@ -1,4 +1,4 @@
-"""Shared application and user data locations."""
+"""Ubicaciones compartidas de la aplicación y de los datos de usuario."""
 
 import os
 import sys
@@ -6,7 +6,7 @@ from pathlib import Path
 
 
 def program_dir() -> str:
-    """Return the application directory in source and compiled builds."""
+    """Devuelve el directorio de la aplicación tanto en desarrollo como en ejecutable compilado."""
     compiled = globals().get("__compiled__")
     if compiled is not None:
         containing = getattr(compiled, "containing_dir", None)
@@ -19,7 +19,7 @@ def program_dir() -> str:
 
 
 def user_data_dir() -> str:
-    """Return the per-user data directory when the app directory is unavailable."""
+    """Devuelve el directorio de datos por usuario cuando el directorio de la app no tiene permisos de escritura."""
     if sys.platform == "win32":
         base = os.environ.get("APPDATA") or os.path.expanduser("~")
     elif sys.platform == "darwin":

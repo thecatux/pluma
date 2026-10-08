@@ -104,9 +104,6 @@ LIGHT = {**_EXTRA,
 
 # Paleta oscura: grafito suave, superficies de cristal ahumado y el
 # mismo acento verde petróleo aclarado para conservar el contraste.
-
-# Paleta oscura: grafito suave, superficies de cristal ahumado y el
-# mismo acento verde petróleo aclarado para conservar el contraste.
 DARK = {**_EXTRA,
     "bg": "#171B19",
     "surface": "#202622",
@@ -162,16 +159,19 @@ DARK = {**_EXTRA,
 # Utilidades
 # ---------------------------------------------------------------------- #
 def _white(alpha: float) -> QColor:
+    """Devuelve un blanco puro con la opacidad indicada (0.0–1.0 → 0–255)."""
     return QColor(255, 255, 255, max(0, min(255, round(alpha * 255))))
 
 
 def _accent(c: dict, alpha: float = 1.0) -> QColor:
+    """Devuelve el color de acento de la paleta con la opacidad indicada."""
     color = QColor(c["primary"])
     color.setAlphaF(max(0.0, min(1.0, alpha)))
     return color
 
 
 def _rounded_path(rect: QRectF, radius: float) -> QPainterPath:
+    """Crea un QPainterPath de rectángulo redondeado listo para recortar o trazar."""
     path = QPainterPath()
     path.addRoundedRect(rect, radius, radius)
     return path
