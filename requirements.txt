@@ -1,0 +1,4 @@
+PySide6
+Nuitka
+# Opcional: exportacion a DOCX
+python-docx
