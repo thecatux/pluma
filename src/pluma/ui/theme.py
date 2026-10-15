@@ -21,10 +21,11 @@ ofrece:
 import logging
 from dataclasses import dataclass
 
-from PySide6.QtCore import QEvent, QObject, QRectF, Qt, Signal, QSettings
+from PySide6.QtCore import QEvent, QObject, QRect, QRectF, Qt, Signal, QSettings
 from PySide6.QtGui import QColor, QGuiApplication, QPainter, QPalette, QPen, QPixmap
-from PySide6.QtWidgets import QFrame, QGroupBox, QStyle, QStyledItemDelegate, QWidget
+from PySide6.QtWidgets import QComboBox, QFrame, QGroupBox, QLabel, QStyle, QStyledItemDelegate, QWidget
 
+from pluma.ui import icons
 from pluma.ui.themes import MODULES
 
 log = logging.getLogger(__name__)
@@ -327,6 +328,57 @@ class _Sheens(QObject):
 
 
 _sheens = _Sheens()
+
+
+class _ComboArrowOverlay(QObject):
+    """Superpone el chevrón SVG en los combos."""
+
+    def __init__(self, app):
+        super().__init__(app)
+        self.app = app
+        self._pixmaps = {}
+        app.installEventFilter(self)
+        signals.changed.connect(self._refresh_all)
+        for widget in app.allWidgets():
+            self._sync(widget)
+
+    def eventFilter(self, watched, event):
+        if isinstance(watched, QComboBox) and event.type() in (
+            QEvent.Type.Show, QEvent.Type.Resize, QEvent.Type.EnabledChange,
+            QEvent.Type.StyleChange
+        ):
+            self._sync(watched)
+        return False
+
+    def _refresh_all(self, *_args):
+        for widget in self.app.allWidgets():
+            self._sync(widget)
+
+    def _sync(self, widget):
+        if not isinstance(widget, QComboBox):
+            return
+        size = min(16, widget.height() - 4)
+        if size <= 0:
+            return
+        color = _current_colors["text_secondary" if widget.isEnabled() else "text_muted"]
+        key = (color, size)
+        pixmap = self._pixmaps.get(key)
+        if pixmap is None:
+            pixmap = icons.pixmap("chevron-down", color, size=size, stroke_width=2.2)
+            self._pixmaps[key] = pixmap
+        overlay = widget.findChild(QLabel, "PlumaComboArrow")
+        if overlay is None:
+            overlay = QLabel(widget)
+            overlay.setObjectName("PlumaComboArrow")
+            overlay.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+            overlay.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+            overlay.setStyleSheet("background: transparent; border: none; padding: 0;")
+        overlay.setPixmap(pixmap)
+        overlay.setFixedSize(size, size)
+        overlay.move(widget.width() - 32 + (32 - size) // 2,
+                     (widget.height() - size) // 2)
+        overlay.show()
+        overlay.raise_()
 
 
 def _blend_colors(foreground: QColor, background: QColor, ratio: float) -> QColor:
@@ -873,6 +925,7 @@ class ThemeController(QObject):
         """Carga la configuración persistida y engancha el sistema de señales del SO."""
         super().__init__(app)
         self.app = app
+        self._combo_arrow_overlay = _ComboArrowOverlay(app)
         self._settings = QSettings()
         name = self._settings.value("theme/name", DEFAULT_THEME)
         self._theme_name = name if name in THEMES else DEFAULT_THEME
