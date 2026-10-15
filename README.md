@@ -1,4 +1,4 @@
-# Pluma
+﻿# Pluma
 
 Pluma es una aplicación de escritorio para planificar y escribir novelas por capítulos. Reúne el manuscrito y las herramientas de organización del proyecto en un mismo lugar, con una interfaz en español.
 
@@ -8,15 +8,16 @@ Pluma es una aplicación de escritorio para planificar y escribir novelas por ca
 - Escribe con formato de texto y guardado automático.
 - Consulta el recuento de palabras y el tiempo estimado de lectura.
 - Mantén fichas de personajes y escenas vinculadas a la historia.
-- Organiza los acontecimientos en una línea de tiempo y guarda notas del proyecto.
+- Organiza los acontecimientos en una línea de tiempo y guarda notas de la historia.
 - Busca y reemplaza texto en el editor.
 - Elige entre temas claros y oscuros.
-- Exporta capítulos seleccionados a Markdown (`.md`), texto plano (`.txt`), OpenDocument (`.odt`), PDF (`.pdf`) o Word (`.docx`). La exportación a DOCX requiere la dependencia opcional `python-docx`.
+- Exporta capítulos seleccionados a Markdown (`.md`), texto plano (`.txt`), OpenDocument (`.odt`), PDF (`.pdf`) o Word (`.docx`).
 
 ## Requisitos
 
 - Python 3.10 o posterior.
-- PySide6, instalado automáticamente con Pluma.
+- PySide6.
+- python-docx (opcional, habilita la exportación a `.docx`).
 
 ## Instalación desde el código fuente
 
@@ -36,16 +37,23 @@ python3 -m venv .venv
 source .venv/bin/activate
 ```
 
-Instala Pluma con el soporte opcional para DOCX:
+Actualiza `pip` e instala Pluma en modo editable:
+
+```bash
+python -m pip install --upgrade pip
+python -m pip install -e .
+```
+
+Si también quieres exportar documentos DOCX, instala la dependencia opcional:
 
 ```bash
 python -m pip install -e ".[docx]"
 ```
 
-Si no necesitas exportar a DOCX, puedes omitir la dependencia opcional:
+Si prefieres instalar desde el archivo de dependencias del proyecto:
 
 ```bash
-python -m pip install -e .
+python -m pip install -r requirements.txt
 ```
 
 ## Ejecutar
@@ -66,7 +74,7 @@ Al iniciar, Pluma permite crear un proyecto o abrir uno existente.
 
 ## Compilación
 
-Pluma se compila con Nuitka en modo onefile desde la raíz del proyecto. Los pasos recomendados son los siguientes:
+Pluma se compila con [Nuitka](https://github.com/nuitka/nuitka) en modo onefile desde la raíz del proyecto. Los pasos recomendados son los siguientes:
 
 ### 1) Preparar el entorno
 
