@@ -368,14 +368,14 @@ class MainWindow(QMainWindow):
         self.project_id = project_id
         self.setWindowTitle(f"Pluma — {project_name}")
         self.project_label.setText(project_name)
-        for panel in self.panels.values():
-            panel.load_project(project_id)
-
         selected = state.get("selected", {})
-        for key in ("chapters", "characters", "scenes", "notes"):
-            item_id = selected.get(key)
-            if item_id is not None:
-                self.panels[key]._reload_list(select_id=item_id)
+        for key, panel in self.panels.items():
+            # Los paneles con lista reciben la selección guardada en una sola
+            # recarga, en vez de reconstruir la lista y luego reseleccionar.
+            if key in ("chapters", "characters", "scenes", "notes"):
+                panel.load_project(project_id, select_id=selected.get(key))
+            else:
+                panel.load_project(project_id)
         outline_id = selected.get("outline")
         outline_view = state.get("outline_view")
         if outline_id is not None or isinstance(outline_view, dict):

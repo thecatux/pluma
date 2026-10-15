@@ -167,12 +167,13 @@ class NotesPanel(QWidget):
 
         return right
 
-    def load_project(self, project_id: int):
-        """Guarda cambios pendientes y carga las notas del proyecto."""
+    def load_project(self, project_id: int, select_id=None):
+        """Guarda cambios pendientes, carga las notas del proyecto y
+        selecciona la nota `select_id` si se indica."""
         self._flush_pending_save()
         self.project_id = project_id
         self._current_note_id = None
-        self._reload_list()
+        self._reload_list(select_id=select_id)
 
     def _reload_list(self, select_id=None):
         """Recarga las notas y selecciona la indicada, si sigue disponible."""

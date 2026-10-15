@@ -40,7 +40,7 @@ def configure_error_logging():
 
     logging.basicConfig(
         handlers=[log_handler],
-        level=logging.ERROR,
+        level=logging.WARNING,
         format="%(asctime)s | %(levelname)s | %(threadName)s\n%(message)s\n",
         datefmt="%Y-%m-%d %H:%M:%S",
     )

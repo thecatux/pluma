@@ -7,6 +7,7 @@ La conversión vive en `exporter`; este panel solo recoge las opciones
 y pide la ruta de destino.
 """
 
+import os
 import re
 
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QFormLayout, QLabel, QFrame,
@@ -237,13 +238,15 @@ class ExportPanel(QWidget):
         return [row for row in chapters if row["id"] in checked]
 
     def _ask_destination(self, extension: str) -> str:
-        """Solicita una ruta de destino y añade la extensión si falta."""
+        """Solicita una ruta de destino y garantiza la extensión del formato elegido."""
         label = FORMATS[extension][0]
         path, _filter = QFileDialog.getSaveFileName(
             self, "Exportar novela", f"{self._default_file_name()}.{extension}",
             f"{label} (*.{extension})")
-        if path and not path.lower().endswith(f".{extension}"):
-            path += f".{extension}"
+        if path:
+            root, current = os.path.splitext(path)
+            if current.lower() != f".{extension}":
+                path = f"{root}.{extension}"
         return path
 
     def _default_file_name(self) -> str:

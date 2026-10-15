@@ -22,20 +22,35 @@ from typing import Any, Optional
 from pluma.core.paths import program_dir, user_data_dir
 
 
+def _is_writable_dir(path: str) -> bool:
+    """Comprueba de verdad si se puede escribir en `path`.
+
+    `os.access` no es fiable en Windows (puede devolver True en carpetas
+    protegidas por ACL/UAC), así que se prueba creando y borrando un
+    archivo temporal.
+    """
+    try:
+        os.makedirs(path, exist_ok=True)
+        probe = os.path.join(path, ".pluma_write_test")
+        with open(probe, "w", encoding="utf-8"):
+            pass
+        os.remove(probe)
+        return True
+    except OSError:
+        return False
+
+
 def _default_db_path() -> str:
     """Calcula la ruta predeterminada de la base de datos SQLite."""
     env_path = os.environ.get("PLUMA_DB_PATH")
     if env_path:
         return env_path
+    # El directorio junto al ejecutable puede ser de solo lectura (p. ej.
+    # instalado en "Archivos de programa"): en ese caso se usa la carpeta
+    # de datos del usuario en lugar de fallar al abrir la base.
     data_dir = os.path.join(program_dir(), "data")
-    try:
-        os.makedirs(data_dir, exist_ok=True)
-        if os.access(data_dir, os.W_OK):
-            return os.path.join(data_dir, "pluma.db")
-    except OSError:
-        pass
-    # El directorio junto al ejecutable es de solo lectura: se usa la
-    # carpeta de datos del usuario en lugar de fallar al abrir la base.
+    if _is_writable_dir(data_dir):
+        return os.path.join(data_dir, "pluma.db")
     return os.path.join(user_data_dir(), "pluma.db")
 
 
@@ -290,7 +305,11 @@ class Database:
             for column, ddl in missing_columns.items():
                 if column not in existing_columns:
                     cur.execute(f"ALTER TABLE projects ADD COLUMN {column} {ddl}")
-            cur.execute("UPDATE projects SET title = name WHERE title = ''")
+            # Solo se rellena `title` con el nombre del proyecto cuando la
+            # columna acaba de crearse; si ya existía, un `title` vacío es
+            # una elección del usuario y no debe sobrescribirse en cada arranque.
+            if "title" not in existing_columns:
+                cur.execute("UPDATE projects SET title = name WHERE title = ''")
 
     def _migrate_chapter_word_count(self):
         """Añade `word_count` a `chapters` si la base de datos es de una

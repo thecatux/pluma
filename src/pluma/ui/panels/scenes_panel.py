@@ -276,12 +276,13 @@ class ScenesPanel(QWidget):
         return right
 
     # ------------------------------------------------------------------ #
-    def load_project(self, project_id: int):
-        """Guarda cambios pendientes y carga las escenas del proyecto."""
+    def load_project(self, project_id: int, select_id=None):
+        """Guarda cambios pendientes, carga las escenas del proyecto y
+        selecciona la escena `select_id` si se indica."""
         self._flush_pending_save()
         self.project_id = project_id
         self._current_scene_id = None
-        self._reload_list()
+        self._reload_list(select_id=select_id)
 
     def _reload_list(self, select_id=None):
         """Recarga escenas y subtítulos, conservando la selección si se indica."""

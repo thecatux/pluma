@@ -19,6 +19,8 @@ el propio botón de modo enfoque vive en un layout aparte con márgenes
 fijos, así que el botón no se desplaza hacia el centro al activarlo.
 """
 
+import re
+
 from PySide6.QtWidgets import (QWidget, QHBoxLayout, QVBoxLayout, QListWidget,
                                 QListWidgetItem, QAbstractItemView, QPushButton,
                                 QLabel, QLineEdit, QSplitter, QMessageBox, QPlainTextEdit,
@@ -356,12 +358,13 @@ class ChaptersPanel(QWidget):
     # ------------------------------------------------------------------ #
     # Ciclo de vida / carga de proyecto
     # ------------------------------------------------------------------ #
-    def load_project(self, project_id: int):
-        """Guarda el estado pendiente y recarga la lista de capítulos del proyecto indicado."""
+    def load_project(self, project_id: int, select_id=None):
+        """Guarda el estado pendiente y recarga la lista del proyecto indicado,
+        seleccionando el capítulo `select_id` si se indica."""
         self._flush_pending_save()
         self.project_id = project_id
         self._current_chapter_id = None
-        self._reload_list(select_id=None)
+        self._reload_list(select_id=select_id)
 
     def _reload_list(self, select_id=None):
         """Recarga la lista de capítulos desde la base de datos y selecciona uno opcionalmente."""
@@ -505,13 +508,26 @@ class ChaptersPanel(QWidget):
     # ------------------------------------------------------------------ #
     # Acciones de lista
     # ------------------------------------------------------------------ #
+    def _next_chapter_title(self) -> str:
+        """Devuelve el siguiente nombre "Capítulo N" sin repetir ninguno ya en uso.
+
+        El número se calcula a partir del mayor "Capítulo N" existente (no del
+        total de capítulos), de modo que borrar o renombrar capítulos no produce
+        títulos duplicados.
+        """
+        highest = 0
+        for row in self.db.list_chapters(self.project_id):
+            match = re.match(r"^Capítulo (\d+)$", row["title"] or "")
+            if match:
+                highest = max(highest, int(match.group(1)))
+        return f"Capítulo {highest + 1}"
+
     def add_chapter(self):
         """Crea un nuevo capítulo al final de la lista y lo selecciona para edición."""
         if self.project_id is None:
             return
         self._flush_pending_save()
-        n = self.db.count_chapters(self.project_id) + 1
-        new_id = self.db.create_chapter(self.project_id, title=f"Capítulo {n}")
+        new_id = self.db.create_chapter(self.project_id, title=self._next_chapter_title())
         self._reload_list(select_id=new_id)
         self.editor.apply_default_font(settings.editor_font_family, settings.editor_font_size)
         self.title_edit.setFocus()
