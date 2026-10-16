@@ -41,4 +41,4 @@ en el log. Notas:
 from . import crystal, marfil, material, tinta
 
 # Orden de registro. El nombre del tema es el nombre del módulo.
-MODULES = (material, crystal, marfil, tinta)
+MODULES = (tinta, material, crystal, marfil)
