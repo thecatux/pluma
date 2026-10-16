@@ -43,7 +43,7 @@ BASE_RADIUS = {"sm": 6, "md": 8, "lg": 12, "xl": 16,
 # ve los valores vigentes.
 RADIUS: dict = {}
 
-DEFAULT_THEME = "material"   # nombre del módulo en `pluma.ui.themes`
+DEFAULT_THEME = "tinta"   # nombre del módulo en `pluma.ui.themes`
 
 MODE_LABELS = {
     "auto": "Automático (según el sistema)",

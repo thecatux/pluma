@@ -284,15 +284,32 @@ class ScenesPanel(QWidget):
         self._current_scene_id = None
         self._reload_list(select_id=select_id)
 
+    def refresh(self):
+        """Recarga la lista y los vínculos al entrar en la sección.
+
+        Así los capítulos nuevos, borrados o renombrados se reflejan sin
+        tener que reabrir el proyecto.
+        """
+        self._reload_list(select_id=self._current_scene_id)
+        if self._current_scene_id is not None:
+            self._reload_chapter_links(self._current_scene_id)
+
     def _reload_list(self, select_id=None):
         """Recarga escenas y subtítulos, conservando la selección si se indica."""
         self._loading = True
         self.list_widget.clear()
         scenes = self.db.list_scenes(self.project_id) if self.project_id else []
         chapters_by_id = {c["id"]: c["title"] for c in self._current_chapters()}
+        # Una sola consulta para los vínculos de todas las escenas, en vez de
+        # una por escena.
+        links_by_scene = (
+            self.db.get_project_scene_chapter_links(self.project_id) if self.project_id else {}
+        )
         target_row = None
         for row in scenes:
-            item = QListWidgetItem(self._scene_item_text(row["id"], row["title"], chapters_by_id))
+            item = QListWidgetItem(
+                self._scene_item_text(row["id"], row["title"], chapters_by_id, links_by_scene)
+            )
             item.setData(Qt.UserRole, row["id"])
             self.list_widget.addItem(item)
             if select_id is not None and row["id"] == select_id:
@@ -311,19 +328,22 @@ class ScenesPanel(QWidget):
         """Devuelve los capítulos del proyecto activo."""
         return self.db.list_chapters(self.project_id) if self.project_id else []
 
-    def _chapter_subtitle(self, scene_id, chapters_by_id=None):
+    def _chapter_subtitle(self, scene_id, chapters_by_id=None, links_by_scene=None):
         """Resume los capítulos vinculados a una escena."""
         if chapters_by_id is None:
             chapters_by_id = {c["id"]: c["title"] for c in self._current_chapters()}
-        linked_ids = self.db.get_scene_chapter_links(scene_id)
+        if links_by_scene is None:
+            linked_ids = self.db.get_scene_chapter_links(scene_id)
+        else:
+            linked_ids = links_by_scene.get(scene_id, [])
         if not linked_ids:
             return "Sin capítulos vinculados"
         names = [chapters_by_id.get(cid, "(capítulo eliminado)") or "(sin título)" for cid in linked_ids]
         return ", ".join(names)
 
-    def _scene_item_text(self, scene_id, title, chapters_by_id=None):
+    def _scene_item_text(self, scene_id, title, chapters_by_id=None, links_by_scene=None):
         """Combina el título de la escena y sus capítulos para la lista."""
-        subtitle = self._chapter_subtitle(scene_id, chapters_by_id)
+        subtitle = self._chapter_subtitle(scene_id, chapters_by_id, links_by_scene)
         return f"{title or '(sin título)'}\n     {subtitle}"
 
     def _refresh_current_list_item(self):
@@ -453,9 +473,12 @@ class ScenesPanel(QWidget):
         """Guarda el título y los valores de los campos de la escena activa."""
         if self._current_scene_id is None:
             return
-        self.db.update_scene(self._current_scene_id, title=self.title_edit.text().strip() or "Sin título")
-        for row in self.fields.rows():
-            self.db.update_scene_field(row.field_id, field_name=row.field_name(), field_value=row.field_value())
+        title = self.title_edit.text().strip() or "Sin título"
+        fields = [
+            {"id": row.field_id, "field_name": row.field_name(), "field_value": row.field_value()}
+            for row in self.fields.rows()
+        ]
+        self.db.update_scene_with_fields(self._current_scene_id, title, fields)
 
     def _flush_pending_save(self):
         """Ejecuta de inmediato el guardado pendiente, si lo hay."""

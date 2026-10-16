@@ -593,6 +593,20 @@ class Database:
         """Actualiza el nombre o valor de un campo de personaje."""
         self._update_row("character_fields", field_id, fields)
 
+    def update_character_with_fields(self, character_id: int, name: str, fields: list[dict]):
+        """Guarda el nombre del personaje y todos sus campos en una sola transacción.
+
+        Cada elemento de `fields` es un diccionario con las claves `id`,
+        `field_name` y `field_value`. Evita el commit por campo que supone
+        llamar a `update_character_field` en bucle.
+        """
+        with self._tx() as cur:
+            cur.execute("UPDATE characters SET name = ? WHERE id = ?", (name, character_id))
+            cur.executemany(
+                "UPDATE character_fields SET field_name = :field_name, field_value = :field_value WHERE id = :id",
+                fields,
+            )
+
     def delete_character_field(self, field_id: int):
         """Elimina un campo de la ficha de personaje por su ID."""
         with self._tx() as cur:
@@ -683,6 +697,20 @@ class Database:
         """Actualiza el nombre o valor de un aspecto de la escena."""
         self._update_row("scene_fields", field_id, fields)
 
+    def update_scene_with_fields(self, scene_id: int, title: str, fields: list[dict]):
+        """Guarda el título de la escena y todos sus campos en una sola transacción.
+
+        Cada elemento de `fields` es un diccionario con las claves `id`,
+        `field_name` y `field_value`. Evita el commit por campo que supone
+        llamar a `update_scene_field` en bucle.
+        """
+        with self._tx() as cur:
+            cur.execute("UPDATE scenes SET title = ? WHERE id = ?", (title, scene_id))
+            cur.executemany(
+                "UPDATE scene_fields SET field_name = :field_name, field_value = :field_value WHERE id = :id",
+                fields,
+            )
+
     def delete_scene_field(self, field_id: int):
         """Elimina un aspecto de la escena por su ID."""
         with self._tx() as cur:
@@ -698,6 +726,28 @@ class Database:
             "SELECT chapter_id FROM scene_chapter_links WHERE scene_id = ?", (scene_id,)
         )
         return [row[0] for row in cur.fetchall()]
+
+    def get_project_scene_chapter_links(self, project_id: int) -> dict[int, list[int]]:
+        """Devuelve los capítulos vinculados a cada escena del proyecto.
+
+        Es el equivalente en una sola consulta de llamar a
+        `get_scene_chapter_links` por cada escena, para construir listas
+        sin una consulta por fila. Solo incluye escenas con vínculos.
+        """
+        cur = self._conn.execute(
+            """
+            SELECT l.scene_id, l.chapter_id
+            FROM scene_chapter_links AS l
+            JOIN scenes AS s ON s.id = l.scene_id
+            WHERE s.project_id = ?
+            ORDER BY l.scene_id, l.chapter_id
+            """,
+            (project_id,),
+        )
+        links: dict[int, list[int]] = {}
+        for scene_id, chapter_id in cur.fetchall():
+            links.setdefault(scene_id, []).append(chapter_id)
+        return links
 
     def set_scene_chapter_links(self, scene_id: int, chapter_ids: list[int]):
         """Establece la lista de capítulos vinculados a la escena reemplazando los anteriores."""

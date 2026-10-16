@@ -291,9 +291,12 @@ class CharactersPanel(QWidget):
         """Guarda el nombre y los valores de todos los campos actuales."""
         if self._current_character_id is None:
             return
-        self.db.update_character(self._current_character_id, name=self.name_edit.text().strip() or "Sin nombre")
-        for row in self.fields.rows():
-            self.db.update_character_field(row.field_id, field_name=row.field_name(), field_value=row.field_value())
+        name = self.name_edit.text().strip() or "Sin nombre"
+        fields = [
+            {"id": row.field_id, "field_name": row.field_name(), "field_value": row.field_value()}
+            for row in self.fields.rows()
+        ]
+        self.db.update_character_with_fields(self._current_character_id, name, fields)
 
     def _flush_pending_save(self):
         """Ejecuta de inmediato el guardado pendiente, si lo hay."""
