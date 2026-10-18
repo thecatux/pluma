@@ -13,6 +13,13 @@ Pluma es una aplicación de escritorio para planificar y escribir novelas por ca
 - Elige entre temas claros y oscuros.
 - Exporta capítulos seleccionados a Markdown (`.md`), texto plano (`.txt`), OpenDocument (`.odt`), PDF (`.pdf`) o Word (`.docx`).
 
+## Capturas
+
+![Editor con recuento de palabras](docs/img/editor.png)
+![Selector de proyectos](docs/img/proyecto.png)
+![Ficha de personaje](docs/img/personajes.png)
+![Linea temporal](docs/img/linea-temporal.png)
+
 ## Requisitos
 
 - Python 3.10 o posterior.
@@ -71,6 +78,41 @@ pluma
 ```
 
 Al iniciar, Pluma permite crear un proyecto o abrir uno existente.
+
+## Estructura del proyecto
+
+```text
+pluma/
+├─ main.py                     # Punto de entrada: arranca Qt, la base de datos y la ventana principal
+├─ pyproject.toml              # Empaquetado e instalación (pip install -e .)
+├─ requirements.txt            # Dependencias del proyecto (runtime y compilación)
+├─ stamp_build.py              # Genera el sello de build antes de compilar con Nuitka
+├─ assets/                     # Iconos de la aplicación (.ico/.svg) y licencia de recursos
+├─ docs/                       # Documentación; estructura de la base de datos en DATABASE.md
+│  └─ img/                     # Capturas de la interfaz
+└─ src/
+   └─ pluma/
+      ├─ core/                  # Lógica sin Qt: persistencia, rutas, exportación y errores
+      │  ├─ db.py               # Capa SQLite: esquema, migraciones y operaciones CRUD
+      │  ├─ exporter.py         # Exportación a md/txt/odt/pdf/docx
+      │  ├─ paths.py            # Rutas de programa y de datos del usuario
+      │  ├─ app_settings.py     # Preferencias persistentes de la aplicación
+      │  ├─ resources.py        # Acceso a los recursos empaquetados
+      │  ├─ error_logging.py    # Registro de errores y avisos de Qt
+      │  ├─ build_info.py       # Versión y metadatos de compilación
+      │  └─ _build_stamp.py     # Generado por stamp_build.py (no editar ni versionar)
+      └─ ui/                    # Interfaz PySide6
+         ├─ main_window.py      # Ventana principal y orquestación de los paneles
+         ├─ editor_widget.py    # Editor de texto enriquecido
+         ├─ find_replace.py     # Buscar y reemplazar
+         ├─ project_dialog.py   # Selección y creación de proyectos
+         ├─ about_dialog.py     # Diálogo «Acerca de»
+         ├─ outline_canvas.py   # Lienzo de la línea temporal
+         ├─ icons.py            # Carga de iconos
+         ├─ theme.py            # Gestión de temas
+         ├─ panels/             # Un panel por sección (capítulos, personajes, escenas…)
+         └─ themes/             # Definiciones de color (tinta, crystal, marfil, material)
+```
 
 ## Compilación
 
@@ -151,6 +193,8 @@ if (Select-String -Path .\dist-onefile\nuitka-report.xml -Pattern 'src[\\/]+plum
 ## Datos del proyecto
 
 Pluma almacena proyectos en una base de datos SQLite. De forma predeterminada, usa `data/pluma.db` junto a la aplicación. Si esa ubicación no permite escritura, utiliza el directorio de datos del usuario del sistema operativo. Para elegir otra ruta, configura la variable de entorno `PLUMA_DB_PATH` antes de iniciar la aplicación.
+
+La estructura detallada de las tablas, relaciones e índices está en [`docs/DATABASE.md`](docs/DATABASE.md).
 
 ## Licencia
 
