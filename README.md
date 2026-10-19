@@ -15,10 +15,10 @@ Pluma es una aplicación de escritorio para planificar y escribir novelas por ca
 
 ## Capturas
 
-![Editor con recuento de palabras](docs/img/editor.png)
-![Selector de proyectos](docs/img/proyecto.png)
-![Ficha de personaje](docs/img/personajes.png)
-![Linea temporal](docs/img/linea-temporal.png)
+| | |
+| :---: | :---: |
+| ![Editor con recuento de palabras](docs/img/editor.png) | ![Selector de proyectos](docs/img/proyecto.png) |
+| ![Ficha de personaje](docs/img/personajes.png) | ![Línea temporal](docs/img/linea-temporal.png) |
 
 ## Requisitos
 
