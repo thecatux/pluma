@@ -55,7 +55,42 @@ def _default_db_path() -> str:
 
 
 _PROGRAM_DIR = program_dir()
-DEFAULT_DB_PATH = _default_db_path()
+
+
+def __getattr__(name: str):
+    """`DEFAULT_DB_PATH` se calcula al pedirlo, no al importar el módulo:
+    así PLUMA_DB_PATH (p. ej. fijada por una prueba tras importar) se
+    respeta y no se crea la carpeta `data` como efecto secundario."""
+    if name == "DEFAULT_DB_PATH":
+        return _default_db_path()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+def _same_file(a: str, b: str) -> bool:
+    try:
+        return os.path.samefile(a, b)
+    except OSError:
+        return os.path.normcase(os.path.abspath(a)) == os.path.normcase(os.path.abspath(b))
+
+
+class DuplicateProjectError(ValueError, sqlite3.IntegrityError):
+    """Ya existe un proyecto con ese nombre (compatible con quien captura
+    ValueError, como la validación de nombre vacío, o IntegrityError)."""
+
+
+# Columnas que `_update_row` acepta por tabla. Evita interpolar nombres
+# arbitrarios en el SQL y que se pueda reescribir `id` o `project_id`.
+_UPDATABLE_COLUMNS = {
+    "projects": {"name", "title", "author", "genre", "synopsis", "page_count", "last_opened_at"},
+    "chapters": {"title", "content", "synopsis", "order_index", "word_count"},
+    "characters": {"name", "order_index"},
+    "character_fields": {"field_name", "field_value", "order_index"},
+    "scenes": {"title", "order_index"},
+    "scene_fields": {"field_name", "field_value", "order_index"},
+    "timeline_blocks": {"title", "date_label", "group_name", "description", "order_index",
+                        "color", "is_milestone", "chapter_id"},
+    "notes": {"title", "content", "updated_at", "order_index"},
+}
 
 # Campos habituales de una ficha de personaje. El usuario puede añadir
 # más libremente; estos solo sirven como plantilla inicial al crear un
@@ -113,10 +148,17 @@ DEFAULT_GENRES = [
 class Database:
     """Gestor de persistencia SQLite para proyectos, capítulos, personajes, escenas y notas."""
 
-    def __init__(self, path: str = DEFAULT_DB_PATH):
-        self.path = path
-        os.makedirs(os.path.dirname(os.path.abspath(path)) or ".", exist_ok=True)
+    def __init__(self, path: Optional[str] = None):
+        self.path = path or _default_db_path()
+        os.makedirs(os.path.dirname(os.path.abspath(self.path)) or ".", exist_ok=True)
         self._conn = sqlite3.connect(self.path)
+        try:
+            self._configure_connection()
+        except BaseException:
+            self._conn.close()
+            raise
+
+    def _configure_connection(self):
         self._conn.row_factory = sqlite3.Row
         self._conn.execute("PRAGMA foreign_keys = ON")
         # WAL permite que las lecturas (listar capítulos, etc.) no se
@@ -137,6 +179,8 @@ class Database:
         usando la API de backup de SQLite (segura de usar con la app
         abierta y con WAL activo, a diferencia de copiar el fichero a
         mano con el sistema de archivos)."""
+        if _same_file(dest_path, self.path):
+            raise ValueError("El destino de la copia no puede ser la propia base de datos.")
         os.makedirs(os.path.dirname(os.path.abspath(dest_path)) or ".", exist_ok=True)
         dest = sqlite3.connect(dest_path)
         try:
@@ -153,15 +197,23 @@ class Database:
         marcha. Lanza ValueError si el archivo no es una copia de Pluma;
         si la copia falla a mitad, la base de datos actual queda intacta.
         """
+        # sqlite3.connect() CREA un archivo vacío si la ruta no existe.
+        if not os.path.isfile(src_path):
+            raise ValueError("El archivo seleccionado no existe.")
+        if _same_file(src_path, self.path):
+            raise ValueError("No se puede restaurar la base de datos desde sí misma.")
         src = sqlite3.connect(src_path)
         try:
             try:
                 tables = {row[0] for row in src.execute(
                     "SELECT name FROM sqlite_master WHERE type = 'table'")}
-            except sqlite3.DatabaseError:  # no es un archivo SQLite
-                tables = set()
+                check = src.execute("PRAGMA quick_check").fetchone()
+            except sqlite3.DatabaseError:  # no es un archivo SQLite, o está dañado
+                tables, check = set(), None
             if not {"projects", "chapters"} <= tables:
                 raise ValueError("El archivo seleccionado no es una copia de seguridad de Pluma.")
+            if check is None or check[0] != "ok":
+                raise ValueError("La copia de seguridad está dañada; no se ha restaurado nada.")
             src.backup(self._conn)
         finally:
             src.close()
@@ -347,9 +399,11 @@ class Database:
         try:
             yield cur
             self._conn.commit()
-        except Exception:
+        except BaseException:
             self._conn.rollback()
             raise
+        finally:
+            cur.close()
 
     @staticmethod
     def _now() -> str:
@@ -371,20 +425,27 @@ class Database:
         name = name.strip()
         if not name:
             raise ValueError("El nombre del proyecto no puede estar vacío.")
-        with self._tx() as cur:
-            cur.execute(
-                "INSERT INTO projects (name, title, created_at, last_opened_at) VALUES (?, ?, ?, ?)",
-                (name, name, self._now(), self._now()),
-            )
-            return cur.lastrowid
+        now = self._now()
+        try:
+            with self._tx() as cur:
+                cur.execute(
+                    "INSERT INTO projects (name, title, created_at, last_opened_at) VALUES (?, ?, ?, ?)",
+                    (name, name, now, now),
+                )
+                return cur.lastrowid
+        except sqlite3.IntegrityError as exc:
+            raise DuplicateProjectError(f"Ya existe un proyecto llamado «{name}».") from exc
 
     def rename_project(self, project_id: int, new_name: str):
         """Modifica el nombre identificativo de un proyecto existente."""
         new_name = new_name.strip()
         if not new_name:
             raise ValueError("El nombre del proyecto no puede estar vacío.")
-        with self._tx() as cur:
-            cur.execute("UPDATE projects SET name = ? WHERE id = ?", (new_name, project_id))
+        try:
+            with self._tx() as cur:
+                cur.execute("UPDATE projects SET name = ? WHERE id = ?", (new_name, project_id))
+        except sqlite3.IntegrityError as exc:
+            raise DuplicateProjectError(f"Ya existe un proyecto llamado «{new_name}».") from exc
 
     def touch_project(self, project_id: int):
         """Actualiza la fecha de última apertura del proyecto a la fecha y hora actual."""
@@ -502,14 +563,19 @@ class Database:
         with self._tx() as cur:
             cur.execute("DELETE FROM chapters WHERE id = ?", (chapter_id,))
 
-    def reorder_chapters(self, ordered_ids: list[int]):
+    def reorder_chapters(self, ordered_ids: list[int], project_id: Optional[int] = None):
         """Recibe la lista completa de ids de capítulos en el nuevo orden
-        deseado y reescribe `order_index` en consecuencia."""
+        deseado y reescribe `order_index` en consecuencia. Si se pasa
+        `project_id`, solo se tocan capítulos de ese proyecto (como hacen
+        el resto de `reorder_*`)."""
         with self._tx() as cur:
             for index, chapter_id in enumerate(ordered_ids):
-                cur.execute(
-                    "UPDATE chapters SET order_index = ? WHERE id = ?", (index, chapter_id)
-                )
+                if project_id is None:
+                    cur.execute("UPDATE chapters SET order_index = ? WHERE id = ?",
+                                (index, chapter_id))
+                else:
+                    cur.execute("UPDATE chapters SET order_index = ? WHERE id = ? AND project_id = ?",
+                                (index, chapter_id, project_id))
 
     # ------------------------------------------------------------------ #
     # Personajes (ficha con campos flexibles clave/valor)
@@ -603,8 +669,10 @@ class Database:
         with self._tx() as cur:
             cur.execute("UPDATE characters SET name = ? WHERE id = ?", (name, character_id))
             cur.executemany(
-                "UPDATE character_fields SET field_name = :field_name, field_value = :field_value WHERE id = :id",
-                fields,
+                "UPDATE character_fields SET field_name = :field_name, field_value = :field_value "
+                "WHERE id = :id AND character_id = :owner_id",
+                [{"id": f["id"], "field_name": f["field_name"], "field_value": f["field_value"],
+                  "owner_id": character_id} for f in fields],
             )
 
     def delete_character_field(self, field_id: int):
@@ -707,8 +775,10 @@ class Database:
         with self._tx() as cur:
             cur.execute("UPDATE scenes SET title = ? WHERE id = ?", (title, scene_id))
             cur.executemany(
-                "UPDATE scene_fields SET field_name = :field_name, field_value = :field_value WHERE id = :id",
-                fields,
+                "UPDATE scene_fields SET field_name = :field_name, field_value = :field_value "
+                "WHERE id = :id AND scene_id = :owner_id",
+                [{"id": f["id"], "field_name": f["field_name"], "field_value": f["field_value"],
+                  "owner_id": scene_id} for f in fields],
             )
 
     def delete_scene_field(self, field_id: int):
@@ -881,6 +951,12 @@ class Database:
         """Ejecuta un UPDATE dinámico sobre la tabla y fila especificadas."""
         if not fields:
             return
+        allowed = _UPDATABLE_COLUMNS.get(table)
+        if allowed is None:
+            raise ValueError(f"Tabla no actualizable: {table!r}")
+        invalid = set(fields) - allowed
+        if invalid:
+            raise ValueError(f"Columnas no permitidas en {table}: {sorted(invalid)}")
         columns = ", ".join(f"{key} = ?" for key in fields)
         values = list(fields.values()) + [row_id]
         with self._tx() as cur:
