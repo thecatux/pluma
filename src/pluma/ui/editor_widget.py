@@ -172,10 +172,12 @@ class RichTextEditor(QWidget):
 
     _ALIGNMENTS = (
         _AlignmentOption("Alinear izquierda", Qt.AlignLeft, "Alinear a la izquierda"),
-        _AlignmentOption("Centrar", Qt.AlignCenter, "Centrar texto"),
+        _AlignmentOption("Centrar", Qt.AlignHCenter, "Centrar texto"),
         _AlignmentOption("Alinear derecha", Qt.AlignRight, "Alinear a la derecha"),
         _AlignmentOption("Justificar", Qt.AlignJustify, "Justificar texto"),
     )
+
+    _H_ALIGN_MASK = Qt.AlignLeft | Qt.AlignRight | Qt.AlignHCenter | Qt.AlignJustify
 
     _ALIGN_ICON_NAMES = {
         "Alinear izquierda": "align-left",
@@ -549,7 +551,7 @@ class RichTextEditor(QWidget):
 
     def _sync_alignment_action(self):
         """Sincroniza los botones de alineación con la alineación del bloque actual."""
-        alignment = self.text_edit.alignment()
+        alignment = self.text_edit.alignment() & self._H_ALIGN_MASK
         for opt in self._ALIGNMENTS:
             self.align_actions[opt.alignment].setChecked(alignment == opt.alignment)
 
