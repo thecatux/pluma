@@ -260,6 +260,7 @@ class RichTextEditor(QWidget):
         if shortcut is not None:
             action.setShortcut(shortcut)
             action.setShortcutContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
+            self.addAction(action)
         if status_tip is not None:
             action.setStatusTip(status_tip)
             tooltip = status_tip
