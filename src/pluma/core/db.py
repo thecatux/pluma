@@ -208,12 +208,22 @@ class Database:
                 tables = {row[0] for row in src.execute(
                     "SELECT name FROM sqlite_master WHERE type = 'table'")}
                 check = src.execute("PRAGMA quick_check").fetchone()
+                foreign_key_errors = src.execute("PRAGMA foreign_key_check").fetchall()
+                project_columns = {row[1] for row in src.execute("PRAGMA table_info(projects)")}
+                chapter_columns = {row[1] for row in src.execute("PRAGMA table_info(chapters)")}
             except sqlite3.DatabaseError:  # no es un archivo SQLite, o está dañado
-                tables, check = set(), None
+                tables, check, foreign_key_errors = set(), None, []
+                project_columns, chapter_columns = set(), set()
             if not {"projects", "chapters"} <= tables:
                 raise ValueError("El archivo seleccionado no es una copia de seguridad de Pluma.")
             if check is None or check[0] != "ok":
                 raise ValueError("La copia de seguridad está dañada; no se ha restaurado nada.")
+            if foreign_key_errors:
+                raise ValueError("La copia de seguridad contiene referencias inválidas; no se ha restaurado nada.")
+            if not {"id", "name", "created_at"} <= project_columns or not {
+                "id", "project_id", "title", "content", "order_index"
+            } <= chapter_columns:
+                raise ValueError("La copia de seguridad no tiene un esquema compatible con Pluma.")
             src.backup(self._conn)
         finally:
             src.close()
@@ -822,6 +832,14 @@ class Database:
     def set_scene_chapter_links(self, scene_id: int, chapter_ids: list[int]):
         """Establece la lista de capítulos vinculados a la escena reemplazando los anteriores."""
         with self._tx() as cur:
+            cur.execute("SELECT project_id FROM scenes WHERE id = ?", (scene_id,))
+            scene = cur.fetchone()
+            if scene is not None:
+                for chapter_id in chapter_ids:
+                    cur.execute("SELECT project_id FROM chapters WHERE id = ?", (chapter_id,))
+                    chapter = cur.fetchone()
+                    if chapter is None or chapter["project_id"] != scene["project_id"]:
+                        raise ValueError("La escena y el capítulo deben pertenecer al mismo proyecto.")
             cur.execute("DELETE FROM scene_chapter_links WHERE scene_id = ?", (scene_id,))
             for chapter_id in chapter_ids:
                 cur.execute(
@@ -856,7 +874,25 @@ class Database:
 
     def update_timeline_block(self, block_id: int, **fields):
         """Actualiza los campos de un bloque de evento en la línea temporal."""
-        self._update_row("timeline_blocks", block_id, fields)
+        if "chapter_id" not in fields or fields["chapter_id"] is None:
+            self._update_row("timeline_blocks", block_id, fields)
+            return
+        allowed = _UPDATABLE_COLUMNS["timeline_blocks"]
+        invalid = set(fields) - allowed
+        if invalid:
+            raise ValueError(f"Columnas no permitidas en timeline_blocks: {sorted(invalid)}")
+        with self._tx() as cur:
+            cur.execute("SELECT project_id FROM timeline_blocks WHERE id = ?", (block_id,))
+            block = cur.fetchone()
+            cur.execute("SELECT project_id FROM chapters WHERE id = ?", (fields["chapter_id"],))
+            chapter = cur.fetchone()
+            if block is not None and (chapter is None or chapter["project_id"] != block["project_id"]):
+                raise ValueError("El bloque y el capítulo deben pertenecer al mismo proyecto.")
+            columns = ", ".join(f"{key} = ?" for key in fields)
+            cur.execute(
+                f"UPDATE timeline_blocks SET {columns} WHERE id = ?",
+                list(fields.values()) + [block_id],
+            )
 
     def duplicate_timeline_block(self, block_id: int) -> Optional[int]:
         """Copia un bloque justo detrás del original y devuelve el id de la copia."""
