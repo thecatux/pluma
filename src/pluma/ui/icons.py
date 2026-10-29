@@ -105,6 +105,10 @@ _ICON_BODIES = {
 
     # -- Iconos funcionales pequeños ------------------------------------ #
     "x": '<line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/>',
+    "save": (
+        '<path d="M4 3.5h13l3.5 3.5v13.5h-17V3.5z"/>'
+        '<path d="M7 3.5v6h10v-6"/><rect x="7" y="13" width="10" height="7" rx="1"/>'
+    ),
     "check": '<polyline points="5,13 9.5,17.5 19,7"/>',
     "chevron-right": '<polyline points="9,5 15,12 9,19"/>',
     "chevron-down": '<polyline points="3,7 12,16 21,7"/>',

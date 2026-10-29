@@ -10,7 +10,7 @@ en SQLite; esta clase hace de anfitrión y gestiona el ciclo de vida del proyect
 from PySide6.QtWidgets import (QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
                                 QListWidget, QListWidgetItem, QStackedWidget,
                                 QStatusBar, QLabel, QFrame, QPushButton, QToolBar,
-                                QMessageBox)
+                                QMessageBox, QToolButton)
 from PySide6.QtCore import Qt, QSize, QTimer, QSettings
 from PySide6.QtGui import QFont, QAction, QKeySequence, QPainter, QTextCursor
 
@@ -269,6 +269,12 @@ class MainWindow(QMainWindow):
             icons.icon("info", theme.colors()["text_secondary"], size=16)
         )
 
+    def _refresh_save_icon(self, *_args):
+        """Actualiza el icono del botón Guardar con el color del tema activo."""
+        self.save_button.setIcon(
+            icons.icon("save", theme.colors()["text_secondary"], size=16)
+        )
+
     def _show_about_dialog(self):
         """Abre el diálogo modal con los detalles de versión y licencia."""
         AboutDialog(self).exec()
@@ -326,12 +332,22 @@ class MainWindow(QMainWindow):
         quit_action.triggered.connect(self.close)
         self.addAction(quit_action)
 
+        self.save_button = QToolButton()
+        self.save_button.setFixedSize(34, 34)
+        self.save_button.setIconSize(QSize(16, 16))
+        self.save_button.setToolTip("Guardar (Ctrl+S)")
+        self.save_button.setAccessibleName("Guardar")
+        self.save_button.clicked.connect(self.save_pending_changes)
+        self.save_button.setEnabled(self.db.has_pending_changes)
+        toolbar.addWidget(self.save_button)
+        self._refresh_save_icon()
+        theme.signals.changed.connect(self._refresh_save_icon)
+
         self.save_action = QAction("Guardar", self)
         self.save_action.setShortcut(QKeySequence.StandardKey.Save)
         self.save_action.setShortcutContext(Qt.ShortcutContext.ApplicationShortcut)
         self.save_action.triggered.connect(self.save_pending_changes)
         self.save_action.setEnabled(self.db.has_pending_changes)
-        toolbar.addAction(self.save_action)
         self.addAction(self.save_action)
 
         toggle_action = QAction("Mostrar u ocultar la barra lateral", self)
@@ -515,6 +531,7 @@ class MainWindow(QMainWindow):
         """Actualiza el asterisco y la disponibilidad de la acción Guardar."""
         if hasattr(self, "save_action"):
             self.save_action.setEnabled(pending)
+            self.save_button.setEnabled(pending)
         if self._project_name is not None:
             marker = " *" if pending else ""
             self.setWindowTitle(f"Pluma — {self._project_name}{marker}")
