@@ -169,7 +169,10 @@ class InfoPanel(QWidget):
         """Inicia (o reinicia) el temporizador de autoguardado si hay un proyecto cargado."""
         if self._loading or self.project_id is None:
             return
-        self._save_timer.start()
+        if settings.autosave_enabled:
+            self._save_timer.start()
+        else:
+            self._save_info()
 
     def _save_info(self):
         """Persiste los datos del formulario en la base de datos."""

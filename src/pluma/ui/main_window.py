@@ -9,11 +9,13 @@ en SQLite; esta clase hace de anfitrión y gestiona el ciclo de vida del proyect
 
 from PySide6.QtWidgets import (QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
                                 QListWidget, QListWidgetItem, QStackedWidget,
-                                QStatusBar, QLabel, QFrame, QPushButton, QToolBar)
+                                QStatusBar, QLabel, QFrame, QPushButton, QToolBar,
+                                QMessageBox)
 from PySide6.QtCore import Qt, QSize, QTimer, QSettings
 from PySide6.QtGui import QFont, QAction, QKeySequence, QPainter, QTextCursor
 
 from pluma.core.db import Database
+from pluma.core.app_settings import settings, signals as settings_signals
 from pluma.ui import icons, theme
 from pluma.ui.about_dialog import AboutDialog
 from pluma.ui.project_dialog import ProjectDialog
@@ -61,6 +63,11 @@ class MainWindow(QMainWindow):
         self.db = db
         self.theme_controller = theme_controller
         self.project_id = None
+        self._project_name = None
+        self._autosave_was_enabled = settings.autosave_enabled
+        self.db.set_manual_save_enabled(not self._autosave_was_enabled)
+        self.db.set_pending_changes_callback(self._on_pending_changes_changed)
+        settings_signals.changed.connect(self._apply_autosave_mode)
         self._restoring_ui_state = False
         self._ui_state_timer = QTimer(self)
         self._ui_state_timer.setSingleShot(True)
@@ -190,7 +197,10 @@ class MainWindow(QMainWindow):
         self.panels["outline"] = OutlinePanel(self.db)
         self.panels["notes"] = NotesPanel(self.db)
         self.panels["export"] = ExportPanel(self.db)
-        self.panels["settings"] = SettingsPanel(self.db, self.theme_controller)
+        self.panels["settings"] = SettingsPanel(
+            self.db, self.theme_controller,
+            pending_changes_resolver=self._confirm_pending_changes,
+        )
         self.panels["settings"].database_restored.connect(self._on_database_restored)
 
         for key, icon_name, _label in SECTIONS:
@@ -316,6 +326,14 @@ class MainWindow(QMainWindow):
         quit_action.triggered.connect(self.close)
         self.addAction(quit_action)
 
+        self.save_action = QAction("Guardar", self)
+        self.save_action.setShortcut(QKeySequence.StandardKey.Save)
+        self.save_action.setShortcutContext(Qt.ShortcutContext.ApplicationShortcut)
+        self.save_action.triggered.connect(self.save_pending_changes)
+        self.save_action.setEnabled(self.db.has_pending_changes)
+        toolbar.addAction(self.save_action)
+        self.addAction(self.save_action)
+
         toggle_action = QAction("Mostrar u ocultar la barra lateral", self)
         toggle_action.setShortcut(QKeySequence("Ctrl+Shift+B"))
         toggle_action.setShortcutContext(Qt.ShortcutContext.ApplicationShortcut)
@@ -361,11 +379,14 @@ class MainWindow(QMainWindow):
                 flush = getattr(panel, "_flush_pending_save", None)
                 if callable(flush):
                     flush()
+            if not self._confirm_pending_changes("cambiar de proyecto"):
+                return
             self._save_ui_state()
 
         state = self.db.get_project_ui_state(project_id)
         self._restoring_ui_state = True
         self.project_id = project_id
+        self._project_name = project_name
         self.setWindowTitle(f"Pluma — {project_name}")
         self.project_label.setText(project_name)
         selected = state.get("selected", {})
@@ -474,6 +495,71 @@ class MainWindow(QMainWindow):
         if self.project_id is not None and not self._restoring_ui_state:
             self.db.save_project_ui_state(self.project_id, self._capture_ui_state())
 
+    def _apply_autosave_mode(self):
+        """Aplica cambios de modo y confirma pendientes al reactivar autoguardado."""
+        enabled = settings.autosave_enabled
+        if enabled == self._autosave_was_enabled:
+            return
+        if not enabled:
+            self.db.set_manual_save_enabled(True)
+        for panel in self.panels.values():
+            flush = getattr(panel, "_flush_pending_save", None)
+            if callable(flush):
+                flush()
+        if enabled:
+            self.db.commit_pending_changes()
+            self.db.set_manual_save_enabled(False)
+        self._autosave_was_enabled = enabled
+
+    def _on_pending_changes_changed(self, pending: bool):
+        """Actualiza el asterisco y la disponibilidad de la acción Guardar."""
+        if hasattr(self, "save_action"):
+            self.save_action.setEnabled(pending)
+        if self._project_name is not None:
+            marker = " *" if pending else ""
+            self.setWindowTitle(f"Pluma — {self._project_name}{marker}")
+
+    def save_pending_changes(self):
+        """Guarda ediciones activas y confirma la transacción del proyecto."""
+        try:
+            for panel in self.panels.values():
+                flush = getattr(panel, "_flush_pending_save", None)
+                if callable(flush):
+                    flush()
+            self.db.commit_pending_changes()
+        except Exception as exc:
+            QMessageBox.warning(self, "No se pudo guardar", str(exc))
+            return False
+        for panel in self.panels.values():
+            show_saved = getattr(panel, "_show_saved_status", None)
+            if callable(show_saved):
+                show_saved()
+        self.statusBar().showMessage("Cambios guardados", 2500)
+        return True
+
+    def _confirm_pending_changes(self, context: str) -> bool:
+        """Pide guardar, descartar o cancelar ante cambios pendientes."""
+        if not self.db.has_pending_changes:
+            return True
+        dialog = QMessageBox(self)
+        dialog.setIcon(QMessageBox.Icon.Question)
+        dialog.setWindowTitle("Cambios sin guardar")
+        dialog.setText(f"Hay cambios sin guardar antes de {context}.")
+        save_button = dialog.addButton("Guardar", QMessageBox.ButtonRole.AcceptRole)
+        discard_button = dialog.addButton("Descartar", QMessageBox.ButtonRole.DestructiveRole)
+        dialog.addButton("Cancelar", QMessageBox.ButtonRole.RejectRole)
+        dialog.setDefaultButton(save_button)
+        dialog.exec()
+        try:
+            if dialog.clickedButton() is save_button:
+                return self.save_pending_changes()
+            if dialog.clickedButton() is discard_button:
+                self.db.discard_pending_changes()
+                return True
+        except Exception as exc:
+            QMessageBox.warning(self, "No se pudo resolver el guardado", str(exc))
+        return False
+
     def _restore_editor_state(self, panel, state, restore_focus):
         """Restaura la posición del cursor, selección y scroll en un editor de texto."""
         text_edit = panel.editor.text_edit
@@ -494,6 +580,8 @@ class MainWindow(QMainWindow):
 
     def prompt_switch_project(self):
         """Muestra el diálogo de selección de proyecto y carga el proyecto escogido."""
+        if not self._confirm_pending_changes("gestionar o cambiar proyectos"):
+            return
         dialog = ProjectDialog(self.db, self)
         if dialog.exec() and dialog.selected_project_id is not None:
             row = next(p for p in self.db.list_projects() if p["id"] == dialog.selected_project_id)
@@ -509,15 +597,15 @@ class MainWindow(QMainWindow):
         self.close()
 
     def closeEvent(self, event):
-        """Garantiza el guardado de cambios pendientes y guarda la geometría de ventana antes de salir."""
-        # Cada panel gestiona su propio autoguardado con un pequeño
-        # retardo; al cerrar la aplicación forzamos que se vuelque
-        # cualquier cambio pendiente para no perder la última edición.
+        """Resuelve cambios pendientes y guarda la geometría antes de salir."""
         if self.project_id is not None:
             for panel in self.panels.values():
                 flush = getattr(panel, "_flush_pending_save", None)
                 if callable(flush):
                     flush()
+            if not self._confirm_pending_changes("salir"):
+                event.ignore()
+                return
         self._ui_state_timer.stop()
         self._save_ui_state()
         self._window_settings.setValue("window/geometry", self.saveGeometry())

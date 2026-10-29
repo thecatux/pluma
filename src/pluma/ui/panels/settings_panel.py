@@ -70,11 +70,12 @@ class SettingsPanel(QWidget):
     # base de datos anterior.
     database_restored = Signal()
 
-    def __init__(self, db, theme_controller=None, parent=None):
+    def __init__(self, db, theme_controller=None, parent=None, pending_changes_resolver=None):
         """Construye los controles y carga las preferencias persistidas."""
         super().__init__(parent)
         self.db = db
         self.theme_controller = theme_controller
+        self.pending_changes_resolver = pending_changes_resolver
         self._loading = False
 
         scroll = QScrollArea()
@@ -209,10 +210,13 @@ class SettingsPanel(QWidget):
         """Construye las preferencias de autoguardado, lectura y borrado."""
         card, layout = self._card(
             "Autoguardado y comportamiento",
-            "Pluma guarda automáticamente mientras escribes; aquí puedes ajustar cuánto espera "
-            "tras dejar de teclear.",
+            "Configura si Pluma guarda automáticamente y cuánto espera tras dejar de teclear.",
         )
         form = self._form()
+
+        self.autosave_enabled_check = QCheckBox("Activar autoguardado")
+        self.autosave_enabled_check.toggled.connect(self._on_autosave_enabled_toggled)
+        form.addRow(self.autosave_enabled_check)
 
         autosave_row = QHBoxLayout()
         self.autosave_slider = QSlider(Qt.Horizontal)
@@ -333,6 +337,8 @@ class SettingsPanel(QWidget):
             self.visual_theme_combo.setCurrentIndex(index if index >= 0 else 0)
 
         self.autosave_slider.setValue(settings.autosave_interval_ms)
+        self.autosave_enabled_check.setChecked(settings.autosave_enabled)
+        self.autosave_slider.setEnabled(settings.autosave_enabled)
         self._update_autosave_label(settings.autosave_interval_ms)
         self.reading_speed_spin.setValue(settings.reading_speed_wpm)
         self.confirm_delete_check.setChecked(settings.confirm_before_delete)
@@ -394,6 +400,13 @@ class SettingsPanel(QWidget):
             return
         settings.autosave_interval_ms = value
 
+    def _on_autosave_enabled_toggled(self, enabled: bool):
+        """Guarda la preferencia y actualiza la disponibilidad del retardo."""
+        if self._loading:
+            return
+        settings.autosave_enabled = enabled
+        self.autosave_slider.setEnabled(enabled)
+
     def _on_reading_speed_changed(self, value: int):
         """Guarda la velocidad de lectura configurada."""
         if self._loading:
@@ -443,6 +456,9 @@ class SettingsPanel(QWidget):
         )
         if not dest_path:
             return
+        if (self.pending_changes_resolver is not None
+                and not self.pending_changes_resolver("crear una copia de seguridad")):
+            return
         try:
             self.db.backup_to(dest_path)
         except Exception as e:
@@ -458,6 +474,9 @@ class SettingsPanel(QWidget):
             self, "Seleccionar copia de seguridad", self._data_dir(), BACKUP_FILTER,
         )
         if not src_path:
+            return
+        if (self.pending_changes_resolver is not None
+                and not self.pending_changes_resolver("restaurar una copia de seguridad")):
             return
         # Restaurar sustituye TODOS los proyectos actuales, así que se
         # pregunta siempre (no depende de "confirmar antes de eliminar").

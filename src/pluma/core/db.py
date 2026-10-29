@@ -150,6 +150,11 @@ class Database:
 
     def __init__(self, path: Optional[str] = None):
         self.path = path or _default_db_path()
+        self._manual_save_enabled = False
+        self._pending_transaction = False
+        self._has_pending_changes = False
+        self._pending_changes_callback = None
+        self._pending_ui_states = {}
         os.makedirs(os.path.dirname(os.path.abspath(self.path)) or ".", exist_ok=True)
         self._conn = sqlite3.connect(self.path)
         try:
@@ -173,6 +178,53 @@ class Database:
     def close(self):
         """Cierra la conexión con la base de datos."""
         self._conn.close()
+
+    @property
+    def has_pending_changes(self) -> bool:
+        """Indica si hay cambios de proyecto pendientes de confirmar."""
+        return self._has_pending_changes
+
+    @property
+    def manual_save_enabled(self) -> bool:
+        """Indica si las escrituras de proyecto se mantienen pendientes."""
+        return self._manual_save_enabled
+
+    def set_pending_changes_callback(self, callback):
+        """Registra una función para notificar cambios en el estado pendiente."""
+        self._pending_changes_callback = callback
+
+    def set_manual_save_enabled(self, enabled: bool):
+        """Activa o desactiva el almacenamiento transaccional pendiente."""
+        self._manual_save_enabled = bool(enabled)
+
+    def commit_pending_changes(self):
+        """Confirma todos los cambios pendientes en una sola transacción."""
+        if self._pending_transaction:
+            self._conn.commit()
+            self._pending_transaction = False
+        self._set_pending_changes(False)
+        self._flush_pending_ui_states()
+
+    def discard_pending_changes(self):
+        """Revierte todos los cambios pendientes de la transacción actual."""
+        if self._pending_transaction:
+            self._conn.rollback()
+            self._pending_transaction = False
+        self._set_pending_changes(False)
+        self._flush_pending_ui_states()
+
+    def _set_pending_changes(self, pending: bool):
+        if self._has_pending_changes == pending:
+            return
+        self._has_pending_changes = pending
+        if self._pending_changes_callback is not None:
+            self._pending_changes_callback(pending)
+
+    def _flush_pending_ui_states(self):
+        states = self._pending_ui_states
+        self._pending_ui_states = {}
+        for project_id, state in states.items():
+            self.save_project_ui_state(project_id, state)
 
     def backup_to(self, dest_path: str):
         """Copia íntegra y consistente de la base de datos a `dest_path`,
@@ -198,6 +250,8 @@ class Database:
         si la copia falla a mitad, la base de datos actual queda intacta.
         """
         # sqlite3.connect() CREA un archivo vacío si la ruta no existe.
+        if self._pending_transaction:
+            raise RuntimeError("Resuelve los cambios pendientes antes de restaurar una copia.")
         if not os.path.isfile(src_path):
             raise ValueError("El archivo seleccionado no existe.")
         if _same_file(src_path, self.path):
@@ -229,7 +283,12 @@ class Database:
             src.close()
         # Una copia hecha con una versión anterior puede carecer de
         # columnas añadidas después: las migraciones las completan.
-        self._init_schema()
+        manual_save_enabled = self._manual_save_enabled
+        self._manual_save_enabled = False
+        try:
+            self._init_schema()
+        finally:
+            self._manual_save_enabled = manual_save_enabled
 
     # ------------------------------------------------------------------ #
     # Esquema
@@ -403,8 +462,31 @@ class Database:
                     cur.execute(f"ALTER TABLE timeline_blocks ADD COLUMN {column} {ddl}")
 
     @contextmanager
-    def _tx(self):
-        """Context manager que abre una transacción SQLite con commit automático o rollback ante error."""
+    def _tx(self, track_pending: bool = True):
+        """Ejecuta una operación atómica, dentro del guardado pendiente si está activo."""
+        if self._manual_save_enabled and (track_pending or self._pending_transaction):
+            started_transaction = not self._pending_transaction
+            if started_transaction:
+                self._conn.execute("BEGIN")
+                self._pending_transaction = True
+            cur = self._conn.cursor()
+            cur.execute("SAVEPOINT pluma_operation")
+            try:
+                yield cur
+                cur.execute("RELEASE SAVEPOINT pluma_operation")
+                if track_pending:
+                    self._set_pending_changes(True)
+            except BaseException:
+                cur.execute("ROLLBACK TO SAVEPOINT pluma_operation")
+                cur.execute("RELEASE SAVEPOINT pluma_operation")
+                if started_transaction and not self._has_pending_changes:
+                    self._conn.rollback()
+                    self._pending_transaction = False
+                raise
+            finally:
+                cur.close()
+            return
+
         cur = self._conn.cursor()
         try:
             yield cur
@@ -437,7 +519,7 @@ class Database:
             raise ValueError("El nombre del proyecto no puede estar vacío.")
         now = self._now()
         try:
-            with self._tx() as cur:
+            with self._tx(track_pending=False) as cur:
                 cur.execute(
                     "INSERT INTO projects (name, title, created_at, last_opened_at) VALUES (?, ?, ?, ?)",
                     (name, name, now, now),
@@ -452,21 +534,21 @@ class Database:
         if not new_name:
             raise ValueError("El nombre del proyecto no puede estar vacío.")
         try:
-            with self._tx() as cur:
+            with self._tx(track_pending=False) as cur:
                 cur.execute("UPDATE projects SET name = ? WHERE id = ?", (new_name, project_id))
         except sqlite3.IntegrityError as exc:
             raise DuplicateProjectError(f"Ya existe un proyecto llamado «{new_name}».") from exc
 
     def touch_project(self, project_id: int):
         """Actualiza la fecha de última apertura del proyecto a la fecha y hora actual."""
-        with self._tx() as cur:
+        with self._tx(track_pending=False) as cur:
             cur.execute(
                 "UPDATE projects SET last_opened_at = ? WHERE id = ?", (self._now(), project_id)
             )
 
     def delete_project(self, project_id: int):
         """Elimina un proyecto y todos sus datos vinculados en cascada."""
-        with self._tx() as cur:
+        with self._tx(track_pending=False) as cur:
             cur.execute("DELETE FROM projects WHERE id = ?", (project_id,))
 
     def get_project(self, project_id: int) -> Optional[sqlite3.Row]:
@@ -490,8 +572,11 @@ class Database:
 
     def save_project_ui_state(self, project_id: int, state: dict[str, Any]):
         """Guarda o actualiza el estado de la interfaz del proyecto en formato JSON."""
+        if self._pending_transaction:
+            self._pending_ui_states[project_id] = state
+            return
         state_json = json.dumps(state, ensure_ascii=False)
-        with self._tx() as cur:
+        with self._tx(track_pending=False) as cur:
             cur.execute(
                 "INSERT INTO project_ui_state (project_id, state_json, updated_at) "
                 "VALUES (?, ?, ?) ON CONFLICT(project_id) DO UPDATE SET "

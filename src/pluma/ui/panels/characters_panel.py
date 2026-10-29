@@ -285,7 +285,10 @@ class CharactersPanel(QWidget):
         """Reinicia el temporizador de autoguardado si hay una ficha activa."""
         if self._loading or self._current_character_id is None:
             return
-        self._save_timer.start()
+        if settings.autosave_enabled:
+            self._save_timer.start()
+        else:
+            self._save_fields()
 
     def _save_fields(self):
         """Guarda el nombre y los valores de todos los campos actuales."""

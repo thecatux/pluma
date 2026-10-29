@@ -854,7 +854,10 @@ class TimelineInspector(QFrame):
         if self._loading or self._block_id is None:
             return
         self.liveChanged.emit(self._block_id, self._fields())
-        self._save_timer.start()
+        if settings.autosave_enabled:
+            self._save_timer.start()
+        else:
+            self._save()
 
     def _save(self):
         """Emite la solicitud formal de guardado del bloque activo."""

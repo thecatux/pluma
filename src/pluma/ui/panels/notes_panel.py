@@ -242,7 +242,10 @@ class NotesPanel(QWidget):
         """Reinicia el temporizador si hay una nota activa y no se está cargando."""
         if self._loading or self._current_note_id is None:
             return
-        self._save_timer.start()
+        if settings.autosave_enabled:
+            self._save_timer.start()
+        else:
+            self._save_current_note()
 
     def _on_title_edited(self, text):
         """Sincroniza el título de la lista y programa el guardado."""

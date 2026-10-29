@@ -467,7 +467,10 @@ class ScenesPanel(QWidget):
         """Reinicia el temporizador si hay una escena activa y no se está cargando."""
         if self._loading or self._current_scene_id is None:
             return
-        self._save_timer.start()
+        if settings.autosave_enabled:
+            self._save_timer.start()
+        else:
+            self._save_fields()
 
     def _save_fields(self):
         """Guarda el título y los valores de los campos de la escena activa."""

@@ -20,6 +20,7 @@ from PySide6.QtCore import QObject, Signal, QSettings
 MIN_AUTOSAVE_MS = 200
 MAX_AUTOSAVE_MS = 5000
 DEFAULT_AUTOSAVE_MS = 600
+DEFAULT_AUTOSAVE_ENABLED = True
 
 MIN_READING_SPEED = 100
 MAX_READING_SPEED = 600
@@ -119,6 +120,14 @@ class AppSettings:
 
     # -- Autoguardado -------------------------------------------------- #
     @property
+    def autosave_enabled(self) -> bool:
+        return self._read_bool("editing/autosave_enabled", DEFAULT_AUTOSAVE_ENABLED)
+
+    @autosave_enabled.setter
+    def autosave_enabled(self, value: bool):
+        self._write("editing/autosave_enabled", bool(value), self.autosave_enabled)
+
+    @property
     def autosave_interval_ms(self) -> int:
         return self._read_int("editing/autosave_ms", DEFAULT_AUTOSAVE_MS,
                               MIN_AUTOSAVE_MS, MAX_AUTOSAVE_MS)
@@ -173,6 +182,7 @@ class AppSettings:
         """Restaura todos los valores de configuración a sus valores iniciales
         por defecto, emitiendo `signals.changed` una única vez."""
         with self.batch():
+            self.autosave_enabled = DEFAULT_AUTOSAVE_ENABLED
             self.autosave_interval_ms = DEFAULT_AUTOSAVE_MS
             self.reading_speed_wpm = DEFAULT_READING_SPEED
             self.confirm_before_delete = True

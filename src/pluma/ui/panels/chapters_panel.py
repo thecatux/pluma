@@ -465,13 +465,23 @@ class ChaptersPanel(QWidget):
         self.save_status_icon.setVisible(False)
         self.save_status_label.setText("")
 
+    def _show_saved_status(self):
+        """Muestra la confirmación visual tras guardar manualmente."""
+        self.save_status_icon.setPixmap(icons.pixmap("check", theme.colors()["success"], size=12))
+        self.save_status_icon.setVisible(True)
+        self.save_status_label.setText("Guardado")
+        self._status_timer.start()
+
     def _schedule_save(self):
         """Inicia (o reinicia) el temporizador de autoguardado si el editor está activo."""
         if self._loading or self._current_chapter_id is None:
             return
         self.save_status_icon.setVisible(False)
         self.save_status_label.setText("Escribiendo…")
-        self._save_timer.start()
+        if settings.autosave_enabled:
+            self._save_timer.start()
+        else:
+            self._save_current_content()
 
     def _on_title_edited(self, _text):
         """Actualiza el recuento de palabras en la lista y programa el autoguardado."""
@@ -494,10 +504,14 @@ class ChaptersPanel(QWidget):
             word_count=self.editor.word_count(),
         )
         self._refresh_total_words()
-        self.save_status_icon.setPixmap(icons.pixmap("check", theme.colors()["success"], size=12))
-        self.save_status_icon.setVisible(True)
-        self.save_status_label.setText("Guardado")
-        self._status_timer.start()
+        if settings.autosave_enabled:
+            self.save_status_icon.setPixmap(icons.pixmap("check", theme.colors()["success"], size=12))
+            self.save_status_icon.setVisible(True)
+            self.save_status_label.setText("Guardado")
+            self._status_timer.start()
+        else:
+            self.save_status_icon.setVisible(False)
+            self.save_status_label.setText("Cambios sin guardar")
 
     def _flush_pending_save(self):
         """Cancela el temporizador y guarda inmediatamente si hay un guardado pendiente."""
